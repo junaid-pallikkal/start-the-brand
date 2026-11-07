@@ -78,7 +78,6 @@ function RealShirtModel({ fabricMaterial, frontTex, backTex, scale, pbrRoughness
 
     if (meshNode?.geometry) {
       const geom = meshNode.geometry.clone();
-      geom.center();
       geom.computeVertexNormals();
       return geom;
     }
