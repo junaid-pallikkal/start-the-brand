@@ -12,7 +12,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: 'Drop-shoulder boxy cut, 280 GSM combed cotton with high-neck ribbed collar.',
     baseCostUSD: 11.50,
     availableColors: defaultColors,
-    modelPath: '/models/oversized-tee.glb',
+    modelPath: '/models/shirt.glb',
     geometryType: 'tshirt',
     uvZones: {
       FRONT: {
@@ -49,7 +49,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: 'Retail fashion fit, 190 GSM ring-spun cotton with seamless double-needle collar.',
     baseCostUSD: 8.75,
     availableColors: defaultColors,
-    modelPath: '/models/regular-tee.glb',
+    modelPath: '/models/shirt.glb',
     geometryType: 'tshirt',
     uvZones: {
       FRONT: {
@@ -86,7 +86,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: '450 GSM cross-grain fleece, double-needle coverstitching, double-lined hood.',
     baseCostUSD: 24.50,
     availableColors: defaultColors,
-    modelPath: '/models/heavyweight-hoodie.glb',
+    modelPath: '/models/hoodie.glb',
     geometryType: 'hoodie',
     uvZones: {
       FRONT: {
@@ -123,7 +123,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: '380 GSM French terry fleece, ribbed cuffs, spandex collar, relaxed dropped shoulders.',
     baseCostUSD: 19.50,
     availableColors: defaultColors,
-    modelPath: '/models/crewneck-sweatshirt.glb',
+    modelPath: '/models/shirt.glb',
     geometryType: 'sweatshirt',
     uvZones: {
       FRONT: {
@@ -160,7 +160,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: 'Open-hole poly mesh with striped ribbed trim and vintage athletic cut.',
     baseCostUSD: 16.00,
     availableColors: defaultColors,
-    modelPath: '/models/basketball-jersey.glb',
+    modelPath: '/models/shirt.glb',
     geometryType: 'jersey',
     uvZones: {
       FRONT: {
@@ -197,7 +197,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: '360 GSM heavyweight cotton fleece, custom metal eyelets and 5.5 inch inseam.',
     baseCostUSD: 14.50,
     availableColors: defaultColors,
-    modelPath: '/models/fleece-shorts.glb',
+    modelPath: '/models/shorts.glb',
     geometryType: 'shorts',
     uvZones: {
       FRONT: {
@@ -234,7 +234,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: 'Heavyweight ripstop cotton, 6 utility bellow pockets, articulated knee darts, adjustable cuff toggles.',
     baseCostUSD: 28.00,
     availableColors: defaultColors,
-    modelPath: '/models/wide-cargo-pants.glb',
+    modelPath: '/models/cargo.glb',
     geometryType: 'cargos',
     uvZones: {
       FRONT: {
@@ -271,7 +271,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
     description: '400 GSM custom milled cotton fleece, deep side welt pockets, elastic encased hem and thick braided drawcord.',
     baseCostUSD: 22.50,
     availableColors: defaultColors,
-    modelPath: '/models/heavyweight-sweatpants.glb',
+    modelPath: '/models/sweatpants.glb',
     geometryType: 'sweatpants',
     uvZones: {
       FRONT: {
@@ -313,7 +313,7 @@ export const DEFAULT_GARMENTS: GarmentSilhouette[] = [
       { name: 'Washed Bleach Ice', hex: '#A8BED9' },
       { name: 'Faded Charcoal Gray', hex: '#3C4048' },
     ],
-    modelPath: '/models/relaxed-denim-jeans.glb',
+    modelPath: '/models/jeans.glb',
     geometryType: 'jeans',
     uvZones: {
       FRONT: {
