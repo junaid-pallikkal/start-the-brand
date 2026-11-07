@@ -4,10 +4,11 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { useStudioStore } from '@/stores/studio-store';
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 import { DesignLayer, TextLayer, ImageLayer } from '@/types/studio';
-import { ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface DragState {
-  type: 'move' | 'resize' | 'rotate' | 'pan';
+  layerId: string;
+  type: 'move' | 'resize' | 'rotate';
   handle?: string;
   startX: number;
   startY: number;
@@ -47,7 +48,6 @@ export function DesignCanvas() {
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept inputs
       if (
         document.activeElement?.tagName === 'INPUT' ||
         document.activeElement?.tagName === 'TEXTAREA'
@@ -97,14 +97,12 @@ export function DesignCanvas() {
   // Handle Layer Selection & Dragging
   const handleLayerMouseDown = (e: React.MouseEvent, layer: DesignLayer) => {
     e.stopPropagation();
-    if (layer.isLocked) {
-      setSelectedLayerId(layer.id);
-      return;
-    }
-
     setSelectedLayerId(layer.id);
 
+    if (layer.isLocked) return;
+
     setDragState({
+      layerId: layer.id,
       type: 'move',
       startX: e.clientX,
       startY: e.clientY,
@@ -121,30 +119,18 @@ export function DesignCanvas() {
     e.stopPropagation();
     if (!selectedLayer || selectedLayer.isLocked) return;
 
-    if (handle === 'rotate') {
-      setDragState({
-        type: 'rotate',
-        startX: e.clientX,
-        startY: e.clientY,
-        startLayerX: selectedLayer.x,
-        startLayerY: selectedLayer.y,
-        startWidth: selectedLayer.width,
-        startHeight: selectedLayer.height,
-        startRotation: selectedLayer.rotation,
-      });
-    } else {
-      setDragState({
-        type: 'resize',
-        handle,
-        startX: e.clientX,
-        startY: e.clientY,
-        startLayerX: selectedLayer.x,
-        startLayerY: selectedLayer.y,
-        startWidth: selectedLayer.width,
-        startHeight: selectedLayer.height,
-        startRotation: selectedLayer.rotation,
-      });
-    }
+    setDragState({
+      layerId: selectedLayer.id,
+      type: handle === 'rotate' ? 'rotate' : 'resize',
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLayerX: selectedLayer.x,
+      startLayerY: selectedLayer.y,
+      startWidth: selectedLayer.width,
+      startHeight: selectedLayer.height,
+      startRotation: selectedLayer.rotation,
+    });
   };
 
   // Mouse Move listener on window for drag/resize/rotate
@@ -159,12 +145,12 @@ export function DesignCanvas() {
       const deltaXPercent = ((e.clientX - dragState.startX) / canvasWidth) * 100 / zoom;
       const deltaYPercent = ((e.clientY - dragState.startY) / canvasHeight) * 100 / zoom;
 
-      if (dragState.type === 'move' && selectedLayerId) {
-        updateLayer(selectedLayerId, {
+      if (dragState.type === 'move') {
+        updateLayer(dragState.layerId, {
           x: Math.round(Math.min(Math.max(dragState.startLayerX + deltaXPercent, 0), 100)),
           y: Math.round(Math.min(Math.max(dragState.startLayerY + deltaYPercent, 0), 100)),
         });
-      } else if (dragState.type === 'resize' && selectedLayerId && dragState.handle) {
+      } else if (dragState.type === 'resize' && dragState.handle) {
         let newWidth = dragState.startWidth;
         let newHeight = dragState.startHeight;
 
@@ -173,26 +159,25 @@ export function DesignCanvas() {
         if (dragState.handle.includes('s')) newHeight += deltaYPercent * 2;
         if (dragState.handle.includes('n')) newHeight -= deltaYPercent * 2;
 
-        updateLayer(selectedLayerId, {
+        updateLayer(dragState.layerId, {
           width: Math.max(5, Math.min(newWidth, 95)),
           height: Math.max(5, Math.min(newHeight, 95)),
         });
-      } else if (dragState.type === 'rotate' && selectedLayerId) {
+      } else if (dragState.type === 'rotate') {
         const centerX = rect.left + (dragState.startLayerX / 100) * canvasWidth;
         const centerY = rect.top + (dragState.startLayerY / 100) * canvasHeight;
         const angleRad = Math.atan2(e.clientY - centerY, e.clientX - centerX);
         let degrees = Math.round((angleRad * 180) / Math.PI + 90);
         if (degrees < 0) degrees += 360;
 
-        // Snap to 45 degree increments if shift key is pressed
         if (e.shiftKey) {
           degrees = Math.round(degrees / 45) * 45;
         }
 
-        updateLayer(selectedLayerId, { rotation: degrees % 360 });
+        updateLayer(dragState.layerId, { rotation: degrees % 360 });
       }
     },
-    [dragState, selectedLayerId, zoom, updateLayer]
+    [dragState, zoom, updateLayer]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -210,7 +195,7 @@ export function DesignCanvas() {
     }
   }, [dragState, handleMouseMove, handleMouseUp]);
 
-  // Canvas Guidelines path for Garments
+  // Garment silhouette outline
   const renderGarmentContour = () => {
     const isPants =
       garment.geometryType === 'cargos' ||
@@ -225,7 +210,6 @@ export function DesignCanvas() {
         preserveAspectRatio="none"
       >
         {isPants ? (
-          // Pants / Shorts Silhouette Contour
           <path
             d="M 28 8 L 72 8 L 76 24 L 72 92 L 53 92 L 50 48 L 47 92 L 28 92 L 24 24 Z"
             fill="none"
@@ -235,7 +219,6 @@ export function DesignCanvas() {
             className="text-white"
           />
         ) : (
-          // Shirt / Hoodie Silhouette Contour
           <path
             d="M 36 8 Q 50 16 64 8 L 86 26 L 76 38 L 70 32 L 72 92 L 28 92 L 30 32 L 24 38 L 14 26 Z"
             fill="none"
@@ -373,14 +356,13 @@ export function DesignCanvas() {
                 {/* Transform Handles on Selected Layer */}
                 {isSelected && !layer.isLocked && (
                   <>
-                    {/* Bounding Box Outline */}
                     <div className="absolute inset-0 border border-brand-volt pointer-events-none" />
 
-                    {/* Rotation Handle on Top */}
+                    {/* Top Rotation Anchor */}
                     <div
                       onMouseDown={(e) => handleAnchorMouseDown(e, 'rotate')}
                       className="absolute -top-6 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-brand-volt border-2 border-black cursor-grab shadow flex items-center justify-center"
-                      title="Rotate"
+                      title="Rotate (Drag)"
                     >
                       <div className="w-1.5 h-1.5 rounded-full bg-black" />
                     </div>

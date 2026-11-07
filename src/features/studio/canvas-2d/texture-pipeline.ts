@@ -6,7 +6,6 @@ class TexturePipeline {
   private imageCache: Map<string, HTMLImageElement> = new Map();
 
   constructor() {
-    // Only initialize in browser environment
     if (typeof window !== 'undefined') {
       const surfaces: SurfaceType[] = ['FRONT', 'BACK', 'LEFT_SLEEVE', 'RIGHT_SLEEVE'];
       surfaces.forEach((surface) => {
@@ -56,27 +55,34 @@ class TexturePipeline {
     for (const layer of sortedLayers) {
       ctx.save();
 
-      // Calculate pixel coordinates from percentage (0-100)
+      // Percentage to 2048x2048 coordinate space
       const centerX = (layer.x / 100) * canvas.width;
       const centerY = (layer.y / 100) * canvas.height;
       const layerWidthPx = (layer.width / 100) * canvas.width * layer.scaleX;
       const layerHeightPx = (layer.height / 100) * canvas.height * layer.scaleY;
 
-      // Translate to layer center and rotate
       ctx.translate(centerX, centerY);
       ctx.rotate((layer.rotation * Math.PI) / 180);
       ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity));
 
       if (layer.type === 'TEXT') {
         const textLayer = layer as TextLayer;
-        const fontSizePx = (textLayer.fontSize / 1000) * canvas.width * layer.scaleY;
+        const fontSizePx = Math.max(
+          16,
+          (textLayer.fontSize / 1000) * canvas.width * layer.scaleY
+        );
 
-        ctx.font = `${textLayer.fontWeight || 'bold'} ${fontSizePx}px ${textLayer.fontFamily}`;
+        // Sanitize font family name for Canvas 2D
+        const cleanFont = (textLayer.fontFamily || 'Impact')
+          .replace(/['"]/g, '')
+          .split(',')[0]
+          .trim();
+
+        ctx.font = `${textLayer.fontWeight || 'bold'} ${Math.round(fontSizePx)}px "${cleanFont}", sans-serif`;
         ctx.fillStyle = textLayer.fillColor || '#FFFFFF';
         ctx.textAlign = (textLayer.textAlign as CanvasTextAlign) || 'center';
         ctx.textBaseline = 'middle';
 
-        // Support letter spacing if available
         if ('letterSpacing' in ctx) {
           (ctx as any).letterSpacing = `${textLayer.letterSpacing || 0}px`;
         }
@@ -105,12 +111,11 @@ class TexturePipeline {
   }
 
   private loadImage(src: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => {
-        // Return blank fallback image
         resolve(new Image());
       };
       img.src = src;

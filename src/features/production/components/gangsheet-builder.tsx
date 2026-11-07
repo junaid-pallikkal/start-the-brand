@@ -96,7 +96,20 @@ export function GangsheetBuilder() {
       ctx.fillStyle = '#181A1F';
       ctx.fillRect(x, y, w, h);
 
-      ctx.strokeStyle = '#343842';
+      if (p.imageUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = p.imageUrl;
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+          ctx.drawImage(img, x, y, w, h);
+        } catch {}
+      }
+
+      ctx.strokeStyle = '#E2F952';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, w, h);
 

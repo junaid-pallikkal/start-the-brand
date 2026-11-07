@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, Palette, RotateCw, Box } from 'lucide-react';
+import { ArrowLeft, Palette, RotateCw, Box, Download, Check } from 'lucide-react';
 import { MockupControls } from '@/features/mockups/components/mockup-controls';
 import type { ViewportRef } from '@/features/mockups/components/mockup-viewport';
 import { useMockupStore } from '@/stores/mockup-store';
@@ -22,7 +22,7 @@ const MockupViewport = dynamic(
       <div className="flex h-full w-full items-center justify-center bg-[#07080A] font-mono text-xs text-zinc-500">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-brand-volt animate-ping" />
-          <span>LOADING 3D PBR ENGINE & WEBGL...</span>
+          <span>INITIALIZING 3D PBR ENGINE & WEBGL...</span>
         </div>
       </div>
     ),
@@ -30,28 +30,47 @@ const MockupViewport = dynamic(
 );
 
 export default function MockupsPage() {
-  const viewportRef = useRef<ViewportRef>(null);
-  const { saveMockupSnapshot, cameraPreset } = useMockupStore();
+  const [viewportApi, setViewportApi] = useState<ViewportRef | null>(null);
+  const { saveMockupSnapshot, cameraPreset, garmentId } = useMockupStore();
   const { project } = useStudioStore();
 
   const handleCaptureSnapshot = async () => {
-    if (!viewportRef.current) return;
-    const dataUrl = viewportRef.current.captureSnapshot();
+    let dataUrl = '';
+
+    // Primary: use direct R3F capture API
+    if (viewportApi) {
+      dataUrl = viewportApi.captureSnapshot();
+    }
+
+    // Secondary: use window global handler
+    if (!dataUrl && typeof window !== 'undefined' && (window as any).__STB_MOCKUP_CAPTURE__) {
+      dataUrl = (window as any).__STB_MOCKUP_CAPTURE__();
+    }
+
+    // Fallback: direct DOM canvas query
+    if (!dataUrl && typeof document !== 'undefined') {
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+      if (canvas) {
+        dataUrl = canvas.toDataURL('image/png', 1.0);
+      }
+    }
+
     if (!dataUrl) {
-      toast.error('Unable to capture 3D viewport');
+      toast.error('Unable to capture 3D viewport canvas. Please verify WebGL is active.');
       return;
     }
 
-    // Save to local storage
+    // Save to local IndexedDB store
     await saveMockupSnapshot(dataUrl);
 
-    // Trigger download
+    // Download snapshot
     const link = document.createElement('a');
-    link.download = `mockup-${project.name.toLowerCase().replace(/\s+/g, '-')}-${cameraPreset}.png`;
+    const safeTitle = (project.name || 'garment').toLowerCase().replace(/\s+/g, '-');
+    link.download = `3d-mockup-${safeTitle}-${cameraPreset}.png`;
     link.href = dataUrl;
     link.click();
 
-    toast.success('4K High-Resolution Mockup Downloaded');
+    toast.success('4K High-Resolution Mockup Captured & Downloaded');
   };
 
   return (
@@ -62,7 +81,7 @@ export default function MockupsPage() {
       {/* Center: Real-Time 3D WebGL PBR Viewport */}
       <div className="relative flex-1 h-full w-full overflow-hidden flex flex-col justify-between">
         {/* Viewport Top Bar */}
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-[#0C0D10]/80 p-2 rounded-sm border border-border backdrop-blur-md text-xs">
+        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-[#0C0D10]/85 p-2 rounded-sm border border-border backdrop-blur-md text-xs">
           <Link
             href={`/studio/${project.id}`}
             className="flex items-center gap-1.5 text-zinc-400 hover:text-brand-volt transition-colors"
@@ -81,14 +100,14 @@ export default function MockupsPage() {
         </div>
 
         {/* Viewport Top Right Status */}
-        <div className="absolute top-4 right-4 z-20 hidden sm:flex items-center gap-2 bg-[#0C0D10]/80 px-3 py-1.5 rounded-sm border border-border backdrop-blur-md text-[11px] text-zinc-400">
+        <div className="absolute top-4 right-4 z-20 hidden sm:flex items-center gap-2 bg-[#0C0D10]/85 px-3 py-1.5 rounded-sm border border-border backdrop-blur-md text-[11px] text-zinc-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span>60 FPS PBR FABRIC WEAVE</span>
         </div>
 
         {/* Interactive 3D Canvas */}
         <div className="flex-1 h-full w-full">
-          <MockupViewport ref={viewportRef} />
+          <MockupViewport onReady={setViewportApi} />
         </div>
       </div>
     </div>

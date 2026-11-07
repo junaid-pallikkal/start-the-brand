@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GarmentMesh } from '../3d-engine/garment-mesh';
@@ -13,41 +13,63 @@ export interface ViewportRef {
   captureSnapshot: () => string;
 }
 
-function CameraController() {
+export interface MockupViewportProps {
+  onReady?: (api: ViewportRef) => void;
+}
+
+// Inner Controller that has access to live R3F Three.js context
+function SceneCameraController({ onReady }: { onReady?: (api: ViewportRef) => void }) {
+  const { gl, scene, camera } = useThree();
   const { cameraPreset, autoRotate } = useMockupStore();
   const controlsRef = useRef<any>(null);
 
+  // Expose bulletproof snapshot API
+  const getSnapshot = useCallback(() => {
+    // Explicitly render scene to guarantee buffer is fully painted
+    gl.render(scene, camera);
+    return gl.domElement.toDataURL('image/png', 1.0);
+  }, [gl, scene, camera]);
+
+  useEffect(() => {
+    if (onReady) {
+      onReady({ captureSnapshot: getSnapshot });
+    }
+    // Also attach to window as fallback
+    (window as any).__STB_MOCKUP_CAPTURE__ = getSnapshot;
+  }, [onReady, getSnapshot]);
+
+  // Handle cinematic camera snaps
   useEffect(() => {
     if (!controlsRef.current) return;
 
-    const camera = controlsRef.current.object as THREE.PerspectiveCamera;
+    const cam = controlsRef.current.object as THREE.PerspectiveCamera;
     const target = controlsRef.current.target as THREE.Vector3;
 
     switch (cameraPreset) {
       case 'isometric':
-        camera.position.set(2.4, 1.2, 2.4);
+        cam.position.set(2.4, 1.2, 2.4);
         target.set(0, 0, 0);
         break;
       case 'graphic':
-        camera.position.set(0, 0.1, 1.6);
+        cam.position.set(0, 0.1, 1.55);
         target.set(0, 0.1, 0);
         break;
       case 'back':
-        camera.position.set(0, 0, -3.2);
+        cam.position.set(0, 0, -3.2);
         target.set(0, 0, 0);
         break;
       case 'macro':
-        camera.position.set(0.3, 0.25, 0.95);
+        cam.position.set(0.3, 0.25, 0.95);
         target.set(0, 0.1, 0);
         break;
       case 'hero':
       default:
-        camera.position.set(0, 0, 3.2);
+        cam.position.set(0, 0, 3.2);
         target.set(0, 0, 0);
         break;
     }
 
-    camera.updateProjectionMatrix();
+    cam.updateProjectionMatrix();
     controlsRef.current.update();
   }, [cameraPreset]);
 
@@ -65,33 +87,48 @@ function CameraController() {
   );
 }
 
-export const MockupViewport = forwardRef<ViewportRef>((props, ref) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+export const MockupViewport = forwardRef<ViewportRef, MockupViewportProps>(
+  ({ onReady }, ref) => {
+    const internalRef = useRef<ViewportRef>({
+      captureSnapshot: () => {
+        if (typeof window !== 'undefined' && (window as any).__STB_MOCKUP_CAPTURE__) {
+          return (window as any).__STB_MOCKUP_CAPTURE__();
+        }
+        const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+        return canvas ? canvas.toDataURL('image/png', 1.0) : '';
+      },
+    });
 
-  useImperativeHandle(ref, () => ({
-    captureSnapshot: () => {
-      if (!canvasRef.current) return '';
-      return canvasRef.current.toDataURL('image/png', 1.0);
-    },
-  }));
+    useImperativeHandle(ref, () => internalRef.current);
 
-  return (
-    <div className="relative h-full w-full bg-[#0A0B0D] overflow-hidden select-none">
-      <Canvas
-        shadows
-        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
-        camera={{ position: [0, 0, 3.2], fov: 42 }}
-        onCreated={({ gl }) => {
-          canvasRef.current = gl.domElement;
-        }}
-        className="h-full w-full"
-      >
-        <CameraController />
-        <StudioEnvironment />
-        <GarmentMesh />
-      </Canvas>
-    </div>
-  );
-});
+    const handleSceneReady = useCallback(
+      (api: ViewportRef) => {
+        internalRef.current = api;
+        if (onReady) onReady(api);
+      },
+      [onReady]
+    );
+
+    return (
+      <div className="relative h-full w-full bg-[#0A0B0D] overflow-hidden select-none">
+        <Canvas
+          shadows
+          gl={{
+            preserveDrawingBuffer: true,
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance',
+          }}
+          camera={{ position: [0, 0, 3.2], fov: 42 }}
+          className="h-full w-full"
+        >
+          <SceneCameraController onReady={handleSceneReady} />
+          <StudioEnvironment />
+          <GarmentMesh />
+        </Canvas>
+      </div>
+    );
+  }
+);
 
 MockupViewport.displayName = 'MockupViewport';

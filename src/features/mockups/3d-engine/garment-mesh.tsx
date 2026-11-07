@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useStudioStore } from '@/stores/studio-store';
@@ -8,7 +8,7 @@ import { useMockupStore } from '@/stores/mockup-store';
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 import { texturePipeline } from '@/features/studio/canvas-2d/texture-pipeline';
 
-// Helper to generate a realistic procedural woven fabric normal bump texture
+// Helper to generate an authentic micro-weave fabric normal bump texture
 function createFabricNormalMap(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -18,7 +18,6 @@ function createFabricNormalMap(): THREE.CanvasTexture {
   ctx.fillStyle = '#808080';
   ctx.fillRect(0, 0, 256, 256);
 
-  // Micro-weave cross-hatch pattern
   const imgData = ctx.getImageData(0, 0, 256, 256);
   const data = imgData.data;
 
@@ -50,8 +49,8 @@ export function GarmentMesh() {
   const { garmentId, garmentColor, pbr, wireframe } = useMockupStore();
 
   const groupRef = useRef<THREE.Group>(null);
-  const frontTextureRef = useRef<THREE.CanvasTexture | null>(null);
-  const backTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const [frontTex, setFrontTex] = useState<THREE.CanvasTexture | null>(null);
+  const [backTex, setBackTex] = useState<THREE.CanvasTexture | null>(null);
 
   const activeGarment =
     DEFAULT_GARMENTS.find((g) => g.id === (garmentId || project.garmentId)) ||
@@ -69,41 +68,53 @@ export function GarmentMesh() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const updateTextures = async () => {
+    let isMounted = true;
+
+    const syncTextures = async () => {
+      // 1. Render front surface
       const frontCanvas = await texturePipeline.renderSurface(
         'FRONT',
         project.layers.FRONT || []
       );
-      if (!frontTextureRef.current) {
-        frontTextureRef.current = new THREE.CanvasTexture(frontCanvas);
-      } else {
-        frontTextureRef.current.image = frontCanvas;
-        frontTextureRef.current.needsUpdate = true;
+      if (isMounted) {
+        const ft = new THREE.CanvasTexture(frontCanvas);
+        ft.anisotropy = 16;
+        ft.generateMipmaps = true;
+        ft.minFilter = THREE.LinearMipmapLinearFilter;
+        ft.needsUpdate = true;
+        setFrontTex(ft);
       }
 
+      // 2. Render back surface
       const backCanvas = await texturePipeline.renderSurface(
         'BACK',
         project.layers.BACK || []
       );
-      if (!backTextureRef.current) {
-        backTextureRef.current = new THREE.CanvasTexture(backCanvas);
-      } else {
-        backTextureRef.current.image = backCanvas;
-        backTextureRef.current.needsUpdate = true;
+      if (isMounted) {
+        const bt = new THREE.CanvasTexture(backCanvas);
+        bt.anisotropy = 16;
+        bt.generateMipmaps = true;
+        bt.minFilter = THREE.LinearMipmapLinearFilter;
+        bt.needsUpdate = true;
+        setBackTex(bt);
       }
     };
 
-    updateTextures();
+    syncTextures();
+
+    return () => {
+      isMounted = false;
+    };
   }, [project.layers, textureVersion]);
 
   // Clean disposal on unmount
   useEffect(() => {
     return () => {
-      frontTextureRef.current?.dispose();
-      backTextureRef.current?.dispose();
+      frontTex?.dispose();
+      backTex?.dispose();
       fabricNormal?.dispose();
     };
-  }, [fabricNormal]);
+  }, [frontTex, backTex, fabricNormal]);
 
   // Procedural 3D Garment Geometries
   const { bodyGeometry, leftArmGeometry, rightArmGeometry, pocketOrHoodGeometry, collarGeometry } =
@@ -117,53 +128,41 @@ export function GarmentMesh() {
       let collar: THREE.BufferGeometry | null = null;
 
       if (gType === 'hoodie') {
-        // Heavyweight Hoodie: Boxy Torso + Deep Hood + Kangaroo Pocket + Ribbed Cuffs
         body = new THREE.CylinderGeometry(0.72, 0.74, 1.45, 32, 1, false);
         leftArm = new THREE.CylinderGeometry(0.24, 0.18, 1.1, 16);
         rightArm = new THREE.CylinderGeometry(0.24, 0.18, 1.1, 16);
-        // Deep Hood (Hemisphere/Sphere)
         extra = new THREE.SphereGeometry(0.48, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.75);
-        // Kangaroo Pocket
         collar = new THREE.BoxGeometry(0.68, 0.32, 0.12);
       } else if (gType === 'sweatshirt') {
-        // Crewneck Sweatshirt: Boxy Torso + Relaxed Sleeves + Ribbed Collar
         body = new THREE.CylinderGeometry(0.68, 0.7, 1.4, 32);
         leftArm = new THREE.CylinderGeometry(0.22, 0.16, 1.05, 16);
         rightArm = new THREE.CylinderGeometry(0.22, 0.16, 1.05, 16);
         collar = new THREE.TorusGeometry(0.26, 0.05, 12, 24);
       } else if (gType === 'jersey') {
-        // Retro Basketball Jersey: Athletic Torso + Ribbed Trim + Armhole Cutouts
         body = new THREE.CylinderGeometry(0.62, 0.64, 1.45, 32);
         collar = new THREE.TorusGeometry(0.28, 0.04, 12, 24);
       } else if (gType === 'shorts') {
-        // Streetwear Fleece Shorts: Waistband + Left & Right Legs
         body = new THREE.CylinderGeometry(0.62, 0.65, 0.35, 32);
         leftArm = new THREE.CylinderGeometry(0.3, 0.32, 0.65, 24);
         rightArm = new THREE.CylinderGeometry(0.3, 0.32, 0.65, 24);
       } else if (gType === 'cargos') {
-        // Tactical Cargo Pants: Waistband + Twin Wide Legs + Flap Utility Pockets
         body = new THREE.CylinderGeometry(0.58, 0.6, 0.35, 32);
         leftArm = new THREE.CylinderGeometry(0.29, 0.34, 1.55, 24);
         rightArm = new THREE.CylinderGeometry(0.29, 0.34, 1.55, 24);
-        // Cargo flap pocket
         extra = new THREE.BoxGeometry(0.12, 0.34, 0.28);
         collar = new THREE.BoxGeometry(0.12, 0.34, 0.28);
       } else if (gType === 'sweatpants') {
-        // Heavy Fleece Sweatpants: Tapered gathered leg cuffs
         body = new THREE.CylinderGeometry(0.56, 0.58, 0.35, 32);
         leftArm = new THREE.CylinderGeometry(0.27, 0.19, 1.55, 24);
         rightArm = new THREE.CylinderGeometry(0.27, 0.19, 1.55, 24);
       } else if (gType === 'jeans') {
-        // 14oz Washed Denim Jeans: Straight Leg Fit
         body = new THREE.CylinderGeometry(0.56, 0.58, 0.35, 32);
         leftArm = new THREE.CylinderGeometry(0.26, 0.25, 1.55, 24);
         rightArm = new THREE.CylinderGeometry(0.26, 0.25, 1.55, 24);
       } else if (gType === 'socks') {
-        // Ribbed Crew Socks: Ankle column + Footbed
         body = new THREE.CylinderGeometry(0.18, 0.17, 0.9, 20);
         extra = new THREE.CylinderGeometry(0.16, 0.15, 0.7, 20);
       } else {
-        // Default T-Shirt (Oversized Boxy or Regular Tee)
         const isOversized = activeGarment.category === 'OVERSIZED_TEE';
         body = new THREE.CylinderGeometry(
           isOversized ? 0.72 : 0.64,
@@ -208,26 +207,34 @@ export function GarmentMesh() {
     });
   }, [colorHex, pbr, fabricNormal, wireframe]);
 
-  // Decal Quad Materials for Front and Back graphics
+  // Decal Quad Materials with polygonOffset to prevent any clipping/z-fighting
   const frontDecalMaterial = useMemo(() => {
     return new THREE.MeshBasicMaterial({
-      map: frontTextureRef.current,
+      map: frontTex,
       transparent: true,
-      opacity: 0.98,
+      opacity: 0.99,
+      depthTest: true,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
       side: THREE.FrontSide,
     });
-  }, [textureVersion]);
+  }, [frontTex]);
 
   const backDecalMaterial = useMemo(() => {
     return new THREE.MeshBasicMaterial({
-      map: backTextureRef.current,
+      map: backTex,
       transparent: true,
-      opacity: 0.98,
+      opacity: 0.99,
+      depthTest: true,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
       side: THREE.FrontSide,
     });
-  }, [textureVersion]);
+  }, [backTex]);
 
   const isLowerBody =
     activeGarment.geometryType === 'shorts' ||
@@ -285,9 +292,14 @@ export function GarmentMesh() {
             </>
           )}
 
-          {/* Front Graphic Decal on Thigh */}
-          <mesh position={[0, -0.2, 0.48]} rotation={[0, 0, 0]} material={frontDecalMaterial}>
-            <planeGeometry args={[0.7, 0.8]} />
+          {/* Left Thigh Graphic Decal (offset slightly forward at z = 0.38) */}
+          <mesh position={[-0.28, -0.25, 0.38]} rotation={[0, 0, 0]} material={frontDecalMaterial}>
+            <planeGeometry args={[0.5, 0.65]} />
+          </mesh>
+
+          {/* Hip Back Graphic Decal */}
+          <mesh position={[0, 0.05, -0.63]} rotation={[0, Math.PI, 0]} material={backDecalMaterial}>
+            <planeGeometry args={[0.6, 0.5]} />
           </mesh>
         </group>
       )}
@@ -295,9 +307,7 @@ export function GarmentMesh() {
       {/* 2. SOCKS */}
       {isSocks && (
         <group position={[0, 0, 0]}>
-          {/* Ankle column */}
           <mesh geometry={bodyGeometry} material={fabricMaterial} castShadow />
-          {/* Footbed */}
           {pocketOrHoodGeometry && (
             <mesh
               geometry={pocketOrHoodGeometry}
@@ -307,8 +317,8 @@ export function GarmentMesh() {
               castShadow
             />
           )}
-          {/* Front graphic */}
-          <mesh position={[0, 0.1, 0.2]} material={frontDecalMaterial}>
+          {/* Sock Graphic */}
+          <mesh position={[0, 0.1, 0.22]} material={frontDecalMaterial}>
             <planeGeometry args={[0.3, 0.4]} />
           </mesh>
         </group>
@@ -320,7 +330,7 @@ export function GarmentMesh() {
           {/* Main Torso */}
           <mesh geometry={bodyGeometry} material={fabricMaterial} castShadow receiveShadow />
 
-          {/* Left Sleeve / Arm */}
+          {/* Left Sleeve */}
           {leftArmGeometry && (
             <mesh
               geometry={leftArmGeometry}
@@ -332,7 +342,7 @@ export function GarmentMesh() {
             />
           )}
 
-          {/* Right Sleeve / Arm */}
+          {/* Right Sleeve */}
           {rightArmGeometry && (
             <mesh
               geometry={rightArmGeometry}
@@ -358,7 +368,6 @@ export function GarmentMesh() {
           {/* Hoodie Deep Hood & Kangaroo Pocket */}
           {activeGarment.geometryType === 'hoodie' && (
             <>
-              {/* Hood */}
               {pocketOrHoodGeometry && (
                 <mesh
                   geometry={pocketOrHoodGeometry}
@@ -368,7 +377,6 @@ export function GarmentMesh() {
                   castShadow
                 />
               )}
-              {/* Kangaroo Pocket */}
               {collarGeometry && (
                 <mesh
                   geometry={collarGeometry}
@@ -380,22 +388,28 @@ export function GarmentMesh() {
             </>
           )}
 
-          {/* FRONT GRAPHIC DECAL PLANE */}
+          {/* FRONT GRAPHIC DECAL PLANE:
+              Positioned at z = 0.78 for hoodies or z = 0.76 for tees so it NEVER clips inside body */}
           <mesh
-            position={[0, 0.05, 0.72]}
+            position={[
+              0,
+              activeGarment.geometryType === 'hoodie' ? 0.15 : 0.05,
+              activeGarment.geometryType === 'hoodie' ? 0.78 : 0.76,
+            ]}
             rotation={[0, 0, 0]}
             material={frontDecalMaterial}
           >
-            <planeGeometry args={[0.92, 1.15]} />
+            <planeGeometry args={[0.95, 1.18]} />
           </mesh>
 
-          {/* BACK GRAPHIC DECAL PLANE */}
+          {/* BACK GRAPHIC DECAL PLANE:
+              Positioned at z = -0.78 for hoodies or z = -0.76 for tees */}
           <mesh
-            position={[0, 0.05, -0.72]}
+            position={[0, 0.05, activeGarment.geometryType === 'hoodie' ? -0.78 : -0.76]}
             rotation={[0, Math.PI, 0]}
             material={backDecalMaterial}
           >
-            <planeGeometry args={[0.92, 1.15]} />
+            <planeGeometry args={[0.95, 1.18]} />
           </mesh>
         </group>
       )}

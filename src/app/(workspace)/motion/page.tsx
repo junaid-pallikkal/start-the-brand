@@ -29,7 +29,7 @@ const TurntableViewport = dynamic(
 );
 
 export default function MotionPage() {
-  const turntableRef = useRef<TurntableRef>(null);
+  const [turntableApi, setTurntableApi] = useState<TurntableRef | null>(null);
   const { project, addImageLayer } = useStudioStore();
 
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -38,7 +38,13 @@ export default function MotionPage() {
   const [generatedImg, setGeneratedImg] = useState<string | null>(null);
 
   const handleStartRecord = () => {
-    turntableRef.current?.startVideoRecording();
+    if (turntableApi) {
+      turntableApi.startVideoRecording();
+    } else if (typeof window !== 'undefined' && (window as any).__STB_TURNTABLE_START_RECORD__) {
+      (window as any).__STB_TURNTABLE_START_RECORD__();
+    } else {
+      toast.error('Turntable engine initializing. Please try again.');
+    }
   };
 
   const handleGenerateAI = async () => {
@@ -112,7 +118,7 @@ export default function MotionPage() {
         </div>
 
         {/* Interactive Turntable Rotational Stage */}
-        <TurntableViewport ref={turntableRef} />
+        <TurntableViewport onReady={setTurntableApi} />
       </div>
 
       {/* AI DESIGN ASSISTANT MODAL */}
