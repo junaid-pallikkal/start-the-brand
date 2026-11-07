@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -174,7 +174,9 @@ export const TurntableViewport = forwardRef<TurntableRef, TurntableViewportProps
             />
             <StudioEnvironment />
             <TurntableRecorderController onReady={handleReady} />
-            <ContinuousRotatingRig />
+            <Suspense fallback={null}>
+              <ContinuousRotatingRig />
+            </Suspense>
           </Canvas>
         </div>
       </div>

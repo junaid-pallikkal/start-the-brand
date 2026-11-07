@@ -1,13 +1,21 @@
 'use client';
 
-import { useMemo, useEffect, useRef, useState } from 'react';
+import { useMemo, useEffect, useRef, useState, Suspense } from 'react';
 import * as THREE from 'three';
+import { useGLTF, Decal } from '@react-three/drei';
 import { useStudioStore } from '@/stores/studio-store';
 import { useMockupStore } from '@/stores/mockup-store';
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 import { texturePipeline } from '@/features/studio/canvas-2d/texture-pipeline';
 
-// Helper to generate an authentic micro-weave fabric normal bump texture
+// Preload the real 3D shirt GLB asset immediately into cache
+if (typeof window !== 'undefined') {
+  try {
+    useGLTF.preload('/models/shirt.glb');
+  } catch {}
+}
+
+// Authentic micro-weave fabric normal bump texture generator
 function createFabricNormalMap(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -23,8 +31,8 @@ function createFabricNormalMap(): THREE.CanvasTexture {
   for (let y = 0; y < 256; y++) {
     for (let x = 0; x < 256; x++) {
       const idx = (y * 256 + x) * 4;
-      const weave = ((x % 4 < 2 && y % 4 < 2) || (x % 4 >= 2 && y % 4 >= 2)) ? 25 : -25;
-      const noise = (Math.random() - 0.5) * 12;
+      const weave = ((x % 4 < 2 && y % 4 < 2) || (x % 4 >= 2 && y % 4 >= 2)) ? 28 : -28;
+      const noise = (Math.random() - 0.5) * 10;
       const val = Math.max(0, Math.min(255, 128 + weave + noise));
 
       data[idx] = val;
@@ -43,6 +51,321 @@ function createFabricNormalMap(): THREE.CanvasTexture {
   return texture;
 }
 
+// --------------------------------------------------------------------------
+// 1. AUTHENTIC 3D GLTF SHIRT (T-Shirt, Oversized Tee, Jersey, Sweatshirt)
+// --------------------------------------------------------------------------
+interface ShirtGLTFProps {
+  fabricMaterial: THREE.Material;
+  frontTex: THREE.Texture | null;
+  backTex: THREE.Texture | null;
+  scale: [number, number, number];
+  pbrRoughness: number;
+}
+
+function RealShirtModel({ fabricMaterial, frontTex, backTex, scale, pbrRoughness }: ShirtGLTFProps) {
+  const { nodes } = useGLTF('/models/shirt.glb') as any;
+
+  const meshGeometry = useMemo(() => {
+    if (nodes?.T_Shirt_male?.geometry) {
+      const geom = nodes.T_Shirt_male.geometry.clone();
+      geom.computeVertexNormals();
+      return geom;
+    }
+    return null;
+  }, [nodes]);
+
+  if (!meshGeometry) return null;
+
+  return (
+    <group position={[0, 0.1, 0]} scale={scale}>
+      <mesh
+        castShadow
+        receiveShadow
+        geometry={meshGeometry}
+        material={fabricMaterial}
+        dispose={null}
+      >
+        {/* Front Chest Graphic Decal wrapped seamlessly onto 3D cloth folds */}
+        {frontTex && (
+          <Decal
+            position={[0, 0.04, 0.145]}
+            rotation={[0, 0, 0]}
+            scale={[0.26, 0.32, 0.28]}
+          >
+            <meshStandardMaterial
+              map={frontTex}
+              transparent
+              alphaTest={0.005}
+              roughness={pbrRoughness}
+              polygonOffset
+              polygonOffsetFactor={-2}
+              depthTest
+              depthWrite={false}
+            />
+          </Decal>
+        )}
+
+        {/* Full Back Graphic Decal wrapped onto back cloth folds */}
+        {backTex && (
+          <Decal
+            position={[0, 0.04, -0.14]}
+            rotation={[0, Math.PI, 0]}
+            scale={[0.26, 0.32, 0.28]}
+          >
+            <meshStandardMaterial
+              map={backTex}
+              transparent
+              alphaTest={0.005}
+              roughness={pbrRoughness}
+              polygonOffset
+              polygonOffsetFactor={-2}
+              depthTest
+              depthWrite={false}
+            />
+          </Decal>
+        )}
+      </mesh>
+    </group>
+  );
+}
+
+// --------------------------------------------------------------------------
+// 2. STREETWEAR HEAVYWEIGHT HOODIE (Draped Hood, Kangaroo Pocket, Drawstrings)
+// --------------------------------------------------------------------------
+interface HoodieProps {
+  fabricMaterial: THREE.Material;
+  frontTex: THREE.Texture | null;
+  backTex: THREE.Texture | null;
+  pbrRoughness: number;
+}
+
+function RealisticHoodieModel({ fabricMaterial, frontTex, backTex, pbrRoughness }: HoodieProps) {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Real 3D Shirt Body & Sleeves as base */}
+      <Suspense fallback={null}>
+        <RealShirtModel
+          fabricMaterial={fabricMaterial}
+          frontTex={frontTex}
+          backTex={backTex}
+          scale={[2.75, 2.55, 2.75]}
+          pbrRoughness={pbrRoughness}
+        />
+      </Suspense>
+
+      {/* Draped Heavyweight 3D Streetwear Hood */}
+      <group position={[0, 0.68, -0.05]} rotation={[0.2, 0, 0]}>
+        <mesh material={fabricMaterial} castShadow>
+          <sphereGeometry args={[0.38, 32, 24, 0, Math.PI * 2, 0, Math.PI * 0.72]} />
+        </mesh>
+        {/* Thick Double-Lined Hood Collar Rim */}
+        <mesh position={[0, -0.12, 0.16]} rotation={[Math.PI / 2, 0, 0]} material={fabricMaterial}>
+          <torusGeometry args={[0.28, 0.06, 16, 32]} />
+        </mesh>
+      </group>
+
+      {/* 3D Kangaroo Pouch Pocket on Lower Abdomen */}
+      <group position={[0, -0.32, 0.36]} rotation={[-0.05, 0, 0]}>
+        <mesh material={fabricMaterial} castShadow>
+          <boxGeometry args={[0.62, 0.32, 0.08]} />
+        </mesh>
+        {/* Left Hand Opening Slit */}
+        <mesh position={[-0.32, 0, 0]} rotation={[0, 0.4, 0]} material={fabricMaterial}>
+          <boxGeometry args={[0.04, 0.28, 0.06]} />
+        </mesh>
+        {/* Right Hand Opening Slit */}
+        <mesh position={[0.32, 0, 0]} rotation={[0, -0.4, 0]} material={fabricMaterial}>
+          <boxGeometry args={[0.04, 0.28, 0.06]} />
+        </mesh>
+      </group>
+
+      {/* Hanging Braided Drawstrings with Metal Aglets */}
+      <group position={[-0.08, 0.46, 0.36]} rotation={[0, 0, -0.05]}>
+        <mesh material={fabricMaterial}>
+          <cylinderGeometry args={[0.012, 0.012, 0.36, 12]} />
+        </mesh>
+        {/* Metal Tip */}
+        <mesh position={[0, -0.19, 0]}>
+          <cylinderGeometry args={[0.014, 0.014, 0.04, 12]} />
+          <meshStandardMaterial color="#D1D5DB" metalness={0.9} roughness={0.2} />
+        </mesh>
+      </group>
+
+      <group position={[0.08, 0.46, 0.36]} rotation={[0, 0, 0.05]}>
+        <mesh material={fabricMaterial}>
+          <cylinderGeometry args={[0.012, 0.012, 0.36, 12]} />
+        </mesh>
+        {/* Metal Tip */}
+        <mesh position={[0, -0.19, 0]}>
+          <cylinderGeometry args={[0.014, 0.014, 0.04, 12]} />
+          <meshStandardMaterial color="#D1D5DB" metalness={0.9} roughness={0.2} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+// --------------------------------------------------------------------------
+// 3. STREETWEAR PANTS (Cargos, Sweatpants, Denim Jeans, Shorts)
+// --------------------------------------------------------------------------
+interface PantsProps {
+  fabricMaterial: THREE.Material;
+  frontTex: THREE.Texture | null;
+  backTex: THREE.Texture | null;
+  category: string;
+}
+
+function RealisticPantsModel({ fabricMaterial, frontTex, backTex, category }: PantsProps) {
+  const isCargos = category === 'WIDE_LEG_CARGO_PANTS';
+  const isJeans = category === 'RELAXED_DENIM_JEANS';
+  const isShorts = category === 'FLEECE_SHORTS';
+
+  const legLength = isShorts ? 0.65 : 1.55;
+  const legY = isShorts ? -0.45 : -0.85;
+
+  return (
+    <group position={[0, 0.45, 0]}>
+      {/* Contoured Waistband */}
+      <mesh material={fabricMaterial} castShadow receiveShadow>
+        <cylinderGeometry args={[0.56, 0.58, 0.36, 32]} />
+      </mesh>
+
+      {/* Fly Seam & Belt Loops */}
+      <mesh position={[0, 0, 0.59]} material={fabricMaterial}>
+        <boxGeometry args={[0.04, 0.32, 0.02]} />
+      </mesh>
+
+      {/* Left Leg with Natural Taper */}
+      <mesh position={[-0.27, legY, 0]} material={fabricMaterial} castShadow receiveShadow>
+        <cylinderGeometry args={[isShorts ? 0.28 : 0.27, isShorts ? 0.3 : 0.23, legLength, 24]} />
+      </mesh>
+
+      {/* Right Leg with Natural Taper */}
+      <mesh position={[0.27, legY, 0]} material={fabricMaterial} castShadow receiveShadow>
+        <cylinderGeometry args={[isShorts ? 0.28 : 0.27, isShorts ? 0.3 : 0.23, legLength, 24]} />
+      </mesh>
+
+      {/* 3D Cargo Bellow Pockets on Outer Thighs (Cargo Pants) */}
+      {isCargos && (
+        <>
+          <group position={[-0.58, -0.65, 0]}>
+            <mesh material={fabricMaterial} castShadow>
+              <boxGeometry args={[0.1, 0.36, 0.26]} />
+            </mesh>
+            {/* Pocket Flap */}
+            <mesh position={[0, 0.18, 0]} rotation={[0, 0, 0.15]} material={fabricMaterial}>
+              <boxGeometry args={[0.12, 0.08, 0.28]} />
+            </mesh>
+          </group>
+
+          <group position={[0.58, -0.65, 0]}>
+            <mesh material={fabricMaterial} castShadow>
+              <boxGeometry args={[0.1, 0.36, 0.26]} />
+            </mesh>
+            {/* Pocket Flap */}
+            <mesh position={[0, 0.18, 0]} rotation={[0, 0, -0.15]} material={fabricMaterial}>
+              <boxGeometry args={[0.12, 0.08, 0.28]} />
+            </mesh>
+          </group>
+        </>
+      )}
+
+      {/* 3D Denim Back Patch Pockets (Jeans) */}
+      {isJeans && (
+        <>
+          <mesh position={[-0.24, 0.02, -0.59]} rotation={[0, Math.PI, 0]} material={fabricMaterial}>
+            <boxGeometry args={[0.24, 0.24, 0.02]} />
+          </mesh>
+          <mesh position={[0.24, 0.02, -0.59]} rotation={[0, Math.PI, 0]} material={fabricMaterial}>
+            <boxGeometry args={[0.24, 0.24, 0.02]} />
+          </mesh>
+        </>
+      )}
+
+      {/* Left Thigh Graphic Decal */}
+      {frontTex && (
+        <mesh position={[-0.27, -0.35, 0.35]} rotation={[0, 0, 0]}>
+          <planeGeometry args={[0.48, 0.6]} />
+          <meshStandardMaterial
+            map={frontTex}
+            transparent
+            alphaTest={0.005}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            side={THREE.FrontSide}
+          />
+        </mesh>
+      )}
+
+      {/* Back Hip Graphic Decal */}
+      {backTex && (
+        <mesh position={[0, 0.05, -0.6]} rotation={[0, Math.PI, 0]}>
+          <planeGeometry args={[0.55, 0.45]} />
+          <meshStandardMaterial
+            map={backTex}
+            transparent
+            alphaTest={0.005}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            side={THREE.FrontSide}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+// --------------------------------------------------------------------------
+// 4. ATHLETIC CREW SOCKS
+// --------------------------------------------------------------------------
+interface SocksProps {
+  fabricMaterial: THREE.Material;
+  frontTex: THREE.Texture | null;
+}
+
+function RealisticSocksModel({ fabricMaterial, frontTex }: SocksProps) {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* 2x1 Athletic Ribbed Leg Tube */}
+      <mesh material={fabricMaterial} castShadow>
+        <cylinderGeometry args={[0.18, 0.16, 0.95, 24]} />
+      </mesh>
+
+      {/* Cushioned Footbed Tube */}
+      <mesh position={[0, -0.42, 0.26]} rotation={[Math.PI / 2, 0, 0]} material={fabricMaterial} castShadow>
+        <cylinderGeometry args={[0.16, 0.15, 0.75, 24]} />
+      </mesh>
+
+      {/* Seamless Toe Cap */}
+      <mesh position={[0, -0.42, 0.63]} material={fabricMaterial}>
+        <sphereGeometry args={[0.15, 16, 16]} />
+      </mesh>
+
+      {/* Contoured Heel Cup */}
+      <mesh position={[0, -0.42, -0.1]} material={fabricMaterial}>
+        <sphereGeometry args={[0.16, 16, 16]} />
+      </mesh>
+
+      {/* Ankle Graphic Decal */}
+      {frontTex && (
+        <mesh position={[0, 0.12, 0.2]} rotation={[0, 0, 0]}>
+          <planeGeometry args={[0.26, 0.34]} />
+          <meshStandardMaterial
+            map={frontTex}
+            transparent
+            alphaTest={0.005}
+            polygonOffset
+            polygonOffsetFactor={-2}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+// --------------------------------------------------------------------------
+// MAIN GARMENT COMPONENT EXPORT
+// --------------------------------------------------------------------------
 export function GarmentMesh() {
   const { project, textureVersion } = useStudioStore();
   const { garmentId, garmentColor, pbr, wireframe } = useMockupStore();
@@ -57,13 +380,13 @@ export function GarmentMesh() {
 
   const colorHex = garmentColor || project.garmentColor || '#0B0B0D';
 
-  // Fabric normal map
+  // Fabric micro-weave bump normal map
   const fabricNormal = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return createFabricNormalMap();
   }, []);
 
-  // Initialize and update dynamic CanvasTextures from 2D Studio
+  // Synchronize 2D studio canvas textures
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -121,84 +444,6 @@ export function GarmentMesh() {
     };
   }, [frontTex, backTex, fabricNormal]);
 
-  // Procedural 3D Garment Geometries
-  const { bodyGeometry, leftArmGeometry, rightArmGeometry, pocketOrHoodGeometry, collarGeometry } =
-    useMemo(() => {
-      const gType = activeGarment.geometryType;
-
-      let body: THREE.BufferGeometry;
-      let leftArm: THREE.BufferGeometry | null = null;
-      let rightArm: THREE.BufferGeometry | null = null;
-      let extra: THREE.BufferGeometry | null = null;
-      let collar: THREE.BufferGeometry | null = null;
-
-      if (gType === 'hoodie') {
-        body = new THREE.CylinderGeometry(0.72, 0.74, 1.45, 32, 1, false);
-        leftArm = new THREE.CylinderGeometry(0.24, 0.18, 1.1, 16);
-        rightArm = new THREE.CylinderGeometry(0.24, 0.18, 1.1, 16);
-        extra = new THREE.SphereGeometry(0.48, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.75);
-        collar = new THREE.BoxGeometry(0.68, 0.32, 0.12);
-      } else if (gType === 'sweatshirt') {
-        body = new THREE.CylinderGeometry(0.68, 0.7, 1.4, 32);
-        leftArm = new THREE.CylinderGeometry(0.22, 0.16, 1.05, 16);
-        rightArm = new THREE.CylinderGeometry(0.22, 0.16, 1.05, 16);
-        collar = new THREE.TorusGeometry(0.26, 0.05, 12, 24);
-      } else if (gType === 'jersey') {
-        body = new THREE.CylinderGeometry(0.62, 0.64, 1.45, 32);
-        collar = new THREE.TorusGeometry(0.28, 0.04, 12, 24);
-      } else if (gType === 'shorts') {
-        body = new THREE.CylinderGeometry(0.62, 0.65, 0.35, 32);
-        leftArm = new THREE.CylinderGeometry(0.3, 0.32, 0.65, 24);
-        rightArm = new THREE.CylinderGeometry(0.3, 0.32, 0.65, 24);
-      } else if (gType === 'cargos') {
-        body = new THREE.CylinderGeometry(0.58, 0.6, 0.35, 32);
-        leftArm = new THREE.CylinderGeometry(0.29, 0.34, 1.55, 24);
-        rightArm = new THREE.CylinderGeometry(0.29, 0.34, 1.55, 24);
-        extra = new THREE.BoxGeometry(0.12, 0.34, 0.28);
-        collar = new THREE.BoxGeometry(0.12, 0.34, 0.28);
-      } else if (gType === 'sweatpants') {
-        body = new THREE.CylinderGeometry(0.56, 0.58, 0.35, 32);
-        leftArm = new THREE.CylinderGeometry(0.27, 0.19, 1.55, 24);
-        rightArm = new THREE.CylinderGeometry(0.27, 0.19, 1.55, 24);
-      } else if (gType === 'jeans') {
-        body = new THREE.CylinderGeometry(0.56, 0.58, 0.35, 32);
-        leftArm = new THREE.CylinderGeometry(0.26, 0.25, 1.55, 24);
-        rightArm = new THREE.CylinderGeometry(0.26, 0.25, 1.55, 24);
-      } else if (gType === 'socks') {
-        body = new THREE.CylinderGeometry(0.18, 0.17, 0.9, 20);
-        extra = new THREE.CylinderGeometry(0.16, 0.15, 0.7, 20);
-      } else {
-        const isOversized = activeGarment.category === 'OVERSIZED_TEE';
-        body = new THREE.CylinderGeometry(
-          isOversized ? 0.72 : 0.64,
-          isOversized ? 0.74 : 0.65,
-          1.4,
-          32
-        );
-        leftArm = new THREE.CylinderGeometry(
-          isOversized ? 0.25 : 0.2,
-          isOversized ? 0.23 : 0.18,
-          0.6,
-          16
-        );
-        rightArm = new THREE.CylinderGeometry(
-          isOversized ? 0.25 : 0.2,
-          isOversized ? 0.23 : 0.18,
-          0.6,
-          16
-        );
-        collar = new THREE.TorusGeometry(0.26, 0.04, 12, 24);
-      }
-
-      return {
-        bodyGeometry: body,
-        leftArmGeometry: leftArm,
-        rightArmGeometry: rightArm,
-        pocketOrHoodGeometry: extra,
-        collarGeometry: collar,
-      };
-    }, [activeGarment]);
-
   // Main PBR Fabric Material
   const fabricMaterial = useMemo(() => {
     return new THREE.MeshStandardMaterial({
@@ -212,223 +457,68 @@ export function GarmentMesh() {
     });
   }, [colorHex, pbr, fabricNormal, wireframe]);
 
-  // Decal Quad Materials with polygonOffset and alphaTest to prevent any clipping/z-fighting
-  const frontDecalMaterial = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      map: frontTex,
-      transparent: true,
-      alphaTest: 0.005,
-      roughness: pbr.roughness,
-      metalness: 0.02,
-      normalMap: fabricNormal,
-      normalScale: new THREE.Vector2(pbr.normalScale * 0.25, pbr.normalScale * 0.25),
-      depthTest: true,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -3,
-      polygonOffsetUnits: -3,
-      side: THREE.FrontSide,
-    });
-    mat.needsUpdate = true;
-    return mat;
-  }, [frontTex, pbr.roughness, fabricNormal, pbr.normalScale]);
-
-  const backDecalMaterial = useMemo(() => {
-    const mat = new THREE.MeshStandardMaterial({
-      map: backTex,
-      transparent: true,
-      alphaTest: 0.005,
-      roughness: pbr.roughness,
-      metalness: 0.02,
-      normalMap: fabricNormal,
-      normalScale: new THREE.Vector2(pbr.normalScale * 0.25, pbr.normalScale * 0.25),
-      depthTest: true,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -3,
-      polygonOffsetUnits: -3,
-      side: THREE.FrontSide,
-    });
-    mat.needsUpdate = true;
-    return mat;
-  }, [backTex, pbr.roughness, fabricNormal, pbr.normalScale]);
-
-  const isLowerBody =
-    activeGarment.geometryType === 'shorts' ||
+  // Determine silhouette model type
+  const isHoodie = activeGarment.geometryType === 'hoodie';
+  const isPants =
     activeGarment.geometryType === 'cargos' ||
     activeGarment.geometryType === 'sweatpants' ||
-    activeGarment.geometryType === 'jeans';
-
+    activeGarment.geometryType === 'jeans' ||
+    activeGarment.geometryType === 'shorts';
   const isSocks = activeGarment.geometryType === 'socks';
+
+  // Scale preset for shirts
+  let shirtScale: [number, number, number] = [2.6, 2.5, 2.6];
+  if (activeGarment.category === 'OVERSIZED_TEE') {
+    shirtScale = [2.75, 2.5, 2.75]; // Streetwear drop-shoulder cut
+  } else if (activeGarment.category === 'REGULAR_TEE') {
+    shirtScale = [2.45, 2.45, 2.45]; // Classic tailored fit
+  } else if (activeGarment.category === 'BASKETBALL_JERSEY') {
+    shirtScale = [2.35, 2.5, 2.35]; // Athletic cut
+  } else if (activeGarment.category === 'CREWNECK_SWEATSHIRT') {
+    shirtScale = [2.7, 2.55, 2.7]; // French terry boxy cut
+  }
 
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
-      {/* 1. LOWER BODY: PANTS / SHORTS */}
-      {isLowerBody && (
-        <group position={[0, 0.4, 0]}>
-          {/* Waistband */}
-          <mesh geometry={bodyGeometry} material={fabricMaterial} castShadow receiveShadow />
-
-          {/* Left Leg */}
-          {leftArmGeometry && (
-            <mesh
-              geometry={leftArmGeometry}
-              material={fabricMaterial}
-              position={[-0.28, -0.75, 0]}
-              castShadow
-              receiveShadow
-            />
-          )}
-
-          {/* Right Leg */}
-          {rightArmGeometry && (
-            <mesh
-              geometry={rightArmGeometry}
-              material={fabricMaterial}
-              position={[0.28, -0.75, 0]}
-              castShadow
-              receiveShadow
-            />
-          )}
-
-          {/* Cargo Pockets */}
-          {activeGarment.geometryType === 'cargos' && pocketOrHoodGeometry && (
-            <>
-              <mesh
-                geometry={pocketOrHoodGeometry}
-                material={fabricMaterial}
-                position={[-0.58, -0.65, 0]}
-                castShadow
-              />
-              <mesh
-                geometry={pocketOrHoodGeometry}
-                material={fabricMaterial}
-                position={[0.58, -0.65, 0]}
-                castShadow
-              />
-            </>
-          )}
-
-          {/* Left Thigh Graphic Decal (offset slightly forward at z = 0.38) */}
-          <mesh position={[-0.28, -0.25, 0.38]} rotation={[0, 0, 0]} material={frontDecalMaterial}>
-            <planeGeometry args={[0.5, 0.65]} />
-          </mesh>
-
-          {/* Hip Back Graphic Decal */}
-          <mesh position={[0, 0.05, -0.63]} rotation={[0, Math.PI, 0]} material={backDecalMaterial}>
-            <planeGeometry args={[0.6, 0.5]} />
-          </mesh>
-        </group>
+      {/* 1. REAL 3D T-SHIRT / JERSEY / SWEATSHIRT */}
+      {!isHoodie && !isPants && !isSocks && (
+        <Suspense fallback={null}>
+          <RealShirtModel
+            fabricMaterial={fabricMaterial}
+            frontTex={frontTex}
+            backTex={backTex}
+            scale={shirtScale}
+            pbrRoughness={pbr.roughness}
+          />
+        </Suspense>
       )}
 
-      {/* 2. SOCKS */}
+      {/* 2. REALISTIC 3D HEAVYWEIGHT HOODIE */}
+      {isHoodie && (
+        <RealisticHoodieModel
+          fabricMaterial={fabricMaterial}
+          frontTex={frontTex}
+          backTex={backTex}
+          pbrRoughness={pbr.roughness}
+        />
+      )}
+
+      {/* 3. REALISTIC STREETWEAR PANTS / SHORTS */}
+      {isPants && (
+        <RealisticPantsModel
+          fabricMaterial={fabricMaterial}
+          frontTex={frontTex}
+          backTex={backTex}
+          category={activeGarment.category}
+        />
+      )}
+
+      {/* 4. ATHLETIC CREW SOCKS */}
       {isSocks && (
-        <group position={[0, 0, 0]}>
-          <mesh geometry={bodyGeometry} material={fabricMaterial} castShadow />
-          {pocketOrHoodGeometry && (
-            <mesh
-              geometry={pocketOrHoodGeometry}
-              material={fabricMaterial}
-              position={[0, -0.4, 0.25]}
-              rotation={[Math.PI / 2, 0, 0]}
-              castShadow
-            />
-          )}
-          {/* Sock Graphic */}
-          <mesh position={[0, 0.1, 0.22]} material={frontDecalMaterial}>
-            <planeGeometry args={[0.3, 0.4]} />
-          </mesh>
-        </group>
-      )}
-
-      {/* 3. UPPER BODY: TEES, HOODIES, SWEATSHIRTS, JERSEYS */}
-      {!isLowerBody && !isSocks && (
-        <group position={[0, 0, 0]}>
-          {/* Main Torso */}
-          <mesh geometry={bodyGeometry} material={fabricMaterial} castShadow receiveShadow />
-
-          {/* Left Sleeve */}
-          {leftArmGeometry && (
-            <mesh
-              geometry={leftArmGeometry}
-              material={fabricMaterial}
-              position={[-0.82, 0.35, 0]}
-              rotation={[0, 0, 0.45]}
-              castShadow
-              receiveShadow
-            />
-          )}
-
-          {/* Right Sleeve */}
-          {rightArmGeometry && (
-            <mesh
-              geometry={rightArmGeometry}
-              material={fabricMaterial}
-              position={[0.82, 0.35, 0]}
-              rotation={[0, 0, -0.45]}
-              castShadow
-              receiveShadow
-            />
-          )}
-
-          {/* Ribbed Collar */}
-          {collarGeometry && activeGarment.geometryType !== 'hoodie' && (
-            <mesh
-              geometry={collarGeometry}
-              material={fabricMaterial}
-              position={[0, 0.72, 0]}
-              rotation={[Math.PI / 2, 0, 0]}
-              castShadow
-            />
-          )}
-
-          {/* Hoodie Deep Hood & Kangaroo Pocket */}
-          {activeGarment.geometryType === 'hoodie' && (
-            <>
-              {pocketOrHoodGeometry && (
-                <mesh
-                  geometry={pocketOrHoodGeometry}
-                  material={fabricMaterial}
-                  position={[0, 0.82, -0.1]}
-                  rotation={[0.2, 0, 0]}
-                  castShadow
-                />
-              )}
-              {collarGeometry && (
-                <mesh
-                  geometry={collarGeometry}
-                  material={fabricMaterial}
-                  position={[0, -0.35, 0.68]}
-                  castShadow
-                />
-              )}
-            </>
-          )}
-
-          {/* FRONT GRAPHIC DECAL PLANE:
-              Positioned at z = 0.78 for hoodies or z = 0.76 for tees so it NEVER clips inside body */}
-          <mesh
-            position={[
-              0,
-              activeGarment.geometryType === 'hoodie' ? 0.15 : 0.05,
-              activeGarment.geometryType === 'hoodie' ? 0.78 : 0.76,
-            ]}
-            rotation={[0, 0, 0]}
-            material={frontDecalMaterial}
-          >
-            <planeGeometry args={[0.95, 1.18]} />
-          </mesh>
-
-          {/* BACK GRAPHIC DECAL PLANE:
-              Positioned at z = -0.78 for hoodies or z = -0.76 for tees */}
-          <mesh
-            position={[0, 0.05, activeGarment.geometryType === 'hoodie' ? -0.78 : -0.76]}
-            rotation={[0, Math.PI, 0]}
-            material={backDecalMaterial}
-          >
-            <planeGeometry args={[0.95, 1.18]} />
-          </mesh>
-        </group>
+        <RealisticSocksModel
+          fabricMaterial={fabricMaterial}
+          frontTex={frontTex}
+        />
       )}
     </group>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, Suspense } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -124,7 +124,9 @@ export const MockupViewport = forwardRef<ViewportRef, MockupViewportProps>(
         >
           <SceneCameraController onReady={handleSceneReady} />
           <StudioEnvironment />
-          <GarmentMesh />
+          <Suspense fallback={null}>
+            <GarmentMesh />
+          </Suspense>
         </Canvas>
       </div>
     );
