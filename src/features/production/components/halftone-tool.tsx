@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Sliders, Download, Upload, RotateCcw, Check } from 'lucide-react';
 import { HalftoneParams } from '@/types/production';
 import { applyHalftoneFilter } from '../algorithms/halftone-filter';
+import { downloadFile } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const SAMPLE_IMAGE =
@@ -60,10 +61,8 @@ export function HalftoneTool() {
   const handleDownload = () => {
     if (!canvasRef.current) return;
     const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
-    link.download = `halftone-print-${params.dotSize}px-${params.angle}deg.png`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `halftone-print-${params.dotSize}px-${params.angle}deg.png`;
+    downloadFile(dataUrl, filename);
     toast.success('Halftone transparent PNG downloaded');
   };
 

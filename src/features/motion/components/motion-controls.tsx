@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useMotionStore } from '@/stores/motion-store';
 import { useStudioStore } from '@/stores/studio-store';
+import { downloadFile } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface MotionControlsProps {
   onStartRecord: () => void;
@@ -35,10 +37,10 @@ export function MotionControls({ onStartRecord }: MotionControlsProps) {
 
   const handleDownloadVideo = () => {
     if (!recordedVideoUrl) return;
-    const link = document.createElement('a');
-    link.download = `turntable-360-${project.name.toLowerCase().replace(/\s+/g, '-')}-${aspectRatio.replace(':', 'x')}.webm`;
-    link.href = recordedVideoUrl;
-    link.click();
+    const safeTitle = (project.name || 'garment').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const filename = `turntable-360-${safeTitle}-${aspectRatio.replace(':', 'x')}.webm`;
+    downloadFile(recordedVideoUrl, filename);
+    toast.success('360° Turntable Video Downloaded');
   };
 
   return (

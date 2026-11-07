@@ -3,6 +3,7 @@ import { CameraPreset, EnvironmentPreset, PBRProperties, SavedMockup } from '@/t
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 import { localDb } from '@/lib/storage/dexie-db';
 import { generateId } from '@/lib/utils';
+import { useStudioStore } from './studio-store';
 
 interface MockupState {
   garmentId: string;
@@ -42,8 +43,18 @@ export const useMockupStore = create<MockupState>((set, get) => ({
   wireframe: false,
   savedMockups: [],
 
-  setGarmentId: (garmentId) => set({ garmentId }),
-  setGarmentColor: (garmentColor) => set({ garmentColor }),
+  setGarmentId: (garmentId) => {
+    set({ garmentId });
+    try {
+      useStudioStore.getState().setGarmentId(garmentId);
+    } catch {}
+  },
+  setGarmentColor: (garmentColor) => {
+    set({ garmentColor });
+    try {
+      useStudioStore.getState().setGarmentColor(garmentColor);
+    } catch {}
+  },
   setCameraPreset: (cameraPreset) => set({ cameraPreset }),
   setEnvironmentPreset: (environmentPreset) => set({ environmentPreset }),
   updatePBR: (updates) => set((state) => ({ pbr: { ...state.pbr, ...updates } })),

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useStudioStore } from '@/stores/studio-store';
 import { texturePipeline } from '../canvas-2d/texture-pipeline';
+import { downloadFile } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function StudioHeader() {
@@ -51,10 +52,9 @@ export function StudioHeader() {
         return;
       }
 
-      const link = document.createElement('a');
-      link.download = `${project.name.toLowerCase().replace(/\s+/g, '-')}-${activeSurface.toLowerCase()}-300dpi.png`;
-      link.href = dataUrl;
-      link.click();
+      const safeTitle = (project.name || 'garment').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const filename = `${safeTitle}-${activeSurface.toLowerCase()}-300dpi.png`;
+      downloadFile(dataUrl, filename);
       toast.success(`Exported ${activeSurface} print decal (300 DPI)`);
     } catch (e) {
       toast.error('Export failed');

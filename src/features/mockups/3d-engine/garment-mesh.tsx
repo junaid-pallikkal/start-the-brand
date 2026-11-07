@@ -2,7 +2,6 @@
 
 import { useMemo, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
 import { useStudioStore } from '@/stores/studio-store';
 import { useMockupStore } from '@/stores/mockup-store';
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
@@ -77,12 +76,15 @@ export function GarmentMesh() {
         project.layers.FRONT || []
       );
       if (isMounted) {
-        const ft = new THREE.CanvasTexture(frontCanvas);
-        ft.anisotropy = 16;
-        ft.generateMipmaps = true;
-        ft.minFilter = THREE.LinearMipmapLinearFilter;
-        ft.needsUpdate = true;
-        setFrontTex(ft);
+        setFrontTex((prev) => {
+          if (prev) prev.dispose();
+          const ft = new THREE.CanvasTexture(frontCanvas);
+          ft.anisotropy = 16;
+          ft.generateMipmaps = true;
+          ft.minFilter = THREE.LinearMipmapLinearFilter;
+          ft.needsUpdate = true;
+          return ft;
+        });
       }
 
       // 2. Render back surface
@@ -91,12 +93,15 @@ export function GarmentMesh() {
         project.layers.BACK || []
       );
       if (isMounted) {
-        const bt = new THREE.CanvasTexture(backCanvas);
-        bt.anisotropy = 16;
-        bt.generateMipmaps = true;
-        bt.minFilter = THREE.LinearMipmapLinearFilter;
-        bt.needsUpdate = true;
-        setBackTex(bt);
+        setBackTex((prev) => {
+          if (prev) prev.dispose();
+          const bt = new THREE.CanvasTexture(backCanvas);
+          bt.anisotropy = 16;
+          bt.generateMipmaps = true;
+          bt.minFilter = THREE.LinearMipmapLinearFilter;
+          bt.needsUpdate = true;
+          return bt;
+        });
       }
     };
 
@@ -207,34 +212,46 @@ export function GarmentMesh() {
     });
   }, [colorHex, pbr, fabricNormal, wireframe]);
 
-  // Decal Quad Materials with polygonOffset to prevent any clipping/z-fighting
+  // Decal Quad Materials with polygonOffset and alphaTest to prevent any clipping/z-fighting
   const frontDecalMaterial = useMemo(() => {
-    return new THREE.MeshBasicMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       map: frontTex,
       transparent: true,
-      opacity: 0.99,
+      alphaTest: 0.005,
+      roughness: pbr.roughness,
+      metalness: 0.02,
+      normalMap: fabricNormal,
+      normalScale: new THREE.Vector2(pbr.normalScale * 0.25, pbr.normalScale * 0.25),
       depthTest: true,
       depthWrite: false,
       polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -4,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
       side: THREE.FrontSide,
     });
-  }, [frontTex]);
+    mat.needsUpdate = true;
+    return mat;
+  }, [frontTex, pbr.roughness, fabricNormal, pbr.normalScale]);
 
   const backDecalMaterial = useMemo(() => {
-    return new THREE.MeshBasicMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       map: backTex,
       transparent: true,
-      opacity: 0.99,
+      alphaTest: 0.005,
+      roughness: pbr.roughness,
+      metalness: 0.02,
+      normalMap: fabricNormal,
+      normalScale: new THREE.Vector2(pbr.normalScale * 0.25, pbr.normalScale * 0.25),
       depthTest: true,
       depthWrite: false,
       polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -4,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
       side: THREE.FrontSide,
     });
-  }, [backTex]);
+    mat.needsUpdate = true;
+    return mat;
+  }, [backTex, pbr.roughness, fabricNormal, pbr.normalScale]);
 
   const isLowerBody =
     activeGarment.geometryType === 'shorts' ||

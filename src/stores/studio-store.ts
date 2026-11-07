@@ -116,17 +116,32 @@ const createDefaultProject = (id = 'default-project'): StudioProject => ({
   updatedAt: new Date().toISOString(),
 });
 
+const getInitialProject = (): StudioProject => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('stb_active_project');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.layers && parsed.id) return parsed;
+      }
+    } catch {}
+  }
+  return createDefaultProject();
+};
+
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+const initialProject = getInitialProject();
+
 export const useStudioStore = create<StudioState>((set, get) => ({
-  project: createDefaultProject(),
+  project: initialProject,
   activeSurface: 'FRONT',
   selectedLayerId: 'layer-brand-text',
   zoom: 1,
   pan: { x: 0, y: 0 },
   isSaving: false,
   lastSavedAt: null,
-  history: [createDefaultProject()],
+  history: [initialProject],
   historyIndex: 0,
   textureVersion: 0,
 
@@ -571,8 +586,15 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   saveProjectLocally: async () => {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
 
+    // Immediate synchronous localStorage update for seamless instant hydration
+    const { project } = get();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('stb_active_project', JSON.stringify(project));
+      } catch {}
+    }
+
     autoSaveTimer = setTimeout(async () => {
-      const { project } = get();
       set({ isSaving: true });
       try {
         await localDb.projects.put({

@@ -3,16 +3,35 @@
 import { useEffect } from 'react';
 import { SurfaceType } from '@/types/garment';
 import { useStudioStore } from '@/stores/studio-store';
+import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 
 export function SurfaceSelector() {
   const { project, activeSurface, setActiveSurface } = useStudioStore();
 
-  const surfaces: { id: SurfaceType; label: string; shortcut: string }[] = [
-    { id: 'FRONT', label: 'Front Chest', shortcut: '1' },
-    { id: 'BACK', label: 'Full Back', shortcut: '2' },
-    { id: 'LEFT_SLEEVE', label: 'Left Sleeve', shortcut: '3' },
-    { id: 'RIGHT_SLEEVE', label: 'Right Sleeve', shortcut: '4' },
-  ];
+  const currentGarment = DEFAULT_GARMENTS.find((g) => g.id === project.garmentId);
+  const isLowerBody =
+    currentGarment?.geometryType === 'cargos' ||
+    currentGarment?.geometryType === 'sweatpants' ||
+    currentGarment?.geometryType === 'jeans' ||
+    currentGarment?.geometryType === 'shorts';
+  const isSocks = currentGarment?.geometryType === 'socks';
+
+  const surfaces: { id: SurfaceType; label: string; shortcut: string }[] = isLowerBody
+    ? [
+        { id: 'FRONT', label: 'Front Thigh', shortcut: '1' },
+        { id: 'BACK', label: 'Back Hip', shortcut: '2' },
+      ]
+    : isSocks
+    ? [
+        { id: 'FRONT', label: 'Ankle Rib', shortcut: '1' },
+        { id: 'BACK', label: 'Calf Back', shortcut: '2' },
+      ]
+    : [
+        { id: 'FRONT', label: 'Front Chest', shortcut: '1' },
+        { id: 'BACK', label: 'Full Back', shortcut: '2' },
+        { id: 'LEFT_SLEEVE', label: 'Left Sleeve', shortcut: '3' },
+        { id: 'RIGHT_SLEEVE', label: 'Right Sleeve', shortcut: '4' },
+      ];
 
   // Number key shortcuts
   useEffect(() => {

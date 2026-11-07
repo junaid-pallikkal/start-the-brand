@@ -15,6 +15,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useGangSheetStore } from '@/stores/gangsheet-store';
+import { downloadFile } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function GangsheetBuilder() {
@@ -120,11 +121,8 @@ export function GangsheetBuilder() {
     }
 
     const dataUrl = canvas.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
-    link.download = `dtf-gangsheet-${roll.widthInches}x${result.totalUsedLengthInches}in.png`;
-    link.href = dataUrl;
-    link.click();
-
+    const filename = `dtf-gangsheet-${roll.widthInches}x${result.totalUsedLengthInches}in.png`;
+    downloadFile(dataUrl, filename);
     toast.success('Print-ready DTF Gang Sheet exported');
   };
 

@@ -41,6 +41,13 @@ class TexturePipeline {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D context not available');
 
+    // Wait for custom fonts to load if document.fonts is available
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      try {
+        await document.fonts.ready;
+      } catch {}
+    }
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -51,6 +58,9 @@ class TexturePipeline {
 
     // Sort layers by zIndex ascending
     const sortedLayers = [...layers].filter((l) => l.isVisible).sort((a, b) => a.zIndex - b.zIndex);
+
+    // 2D preview container is approx 560px; scale factor to 2048 is ~3.657
+    const scaleFactor = canvas.width / 560;
 
     for (const layer of sortedLayers) {
       ctx.save();
@@ -68,8 +78,8 @@ class TexturePipeline {
       if (layer.type === 'TEXT') {
         const textLayer = layer as TextLayer;
         const fontSizePx = Math.max(
-          16,
-          (textLayer.fontSize / 1000) * canvas.width * layer.scaleY
+          18,
+          Math.round(textLayer.fontSize * scaleFactor * layer.scaleY)
         );
 
         // Sanitize font family name for Canvas 2D
@@ -78,13 +88,13 @@ class TexturePipeline {
           .split(',')[0]
           .trim();
 
-        ctx.font = `${textLayer.fontWeight || 'bold'} ${Math.round(fontSizePx)}px "${cleanFont}", sans-serif`;
+        ctx.font = `${textLayer.fontWeight || 'bold'} ${fontSizePx}px "${cleanFont}", sans-serif`;
         ctx.fillStyle = textLayer.fillColor || '#FFFFFF';
         ctx.textAlign = (textLayer.textAlign as CanvasTextAlign) || 'center';
         ctx.textBaseline = 'middle';
 
-        if ('letterSpacing' in ctx) {
-          (ctx as any).letterSpacing = `${textLayer.letterSpacing || 0}px`;
+        if ('letterSpacing' in ctx && textLayer.letterSpacing) {
+          (ctx as any).letterSpacing = `${Math.round(textLayer.letterSpacing * scaleFactor)}px`;
         }
 
         ctx.fillText(textLayer.text, 0, 0);
@@ -97,7 +107,7 @@ class TexturePipeline {
           this.imageCache.set(imgLayer.src, img);
         }
 
-        if (img) {
+        if (img && img.width > 0) {
           const drawX = -layerWidthPx / 2;
           const drawY = -layerHeightPx / 2;
           ctx.drawImage(img, drawX, drawY, layerWidthPx, layerHeightPx);

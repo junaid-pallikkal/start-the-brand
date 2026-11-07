@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Pipette, Download, Upload, Sliders } from 'lucide-react';
 import { KnockoutParams } from '@/types/production';
 import { applyKnockoutFilter } from '../algorithms/knockout-filter';
+import { downloadFile } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const SAMPLE_IMAGE =
@@ -60,10 +61,8 @@ export function KnockoutTool() {
   const handleDownload = () => {
     if (!canvasRef.current) return;
     const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
-    link.download = `knockout-transparent-${params.targetHex.replace('#', '')}.png`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `knockout-transparent-${params.targetHex.replace('#', '')}.png`;
+    downloadFile(dataUrl, filename);
     toast.success('Transparent Knockout PNG downloaded');
   };
 

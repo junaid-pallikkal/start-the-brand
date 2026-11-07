@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Sliders, Download, Upload, ArrowLeftRight } from 'lucide-react';
 import { ThresholdParams } from '@/types/production';
 import { applyThresholdFilter } from '../algorithms/threshold-filter';
+import { downloadFile } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const SAMPLE_IMAGE =
@@ -58,10 +59,8 @@ export function ThresholdTool() {
   const handleDownload = () => {
     if (!canvasRef.current) return;
     const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
-    const link = document.createElement('a');
-    link.download = `threshold-positive-cutoff-${params.cutoff}.png`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `threshold-positive-cutoff-${params.cutoff}.png`;
+    downloadFile(dataUrl, filename);
     toast.success('1-bit Film Positive PNG downloaded');
   };
 
