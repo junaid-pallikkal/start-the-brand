@@ -1,13 +1,21 @@
 -- ==============================================================================
--- STARTTHEBRAND — SUPABASE POSTGRESQL INITIAL SCHEMA & RLS POLICIES
+-- STARTTHEBRAND — MASTER PRODUCTION POSTGRESQL SCHEMA
 -- ==============================================================================
+
+-- Enable UUID extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. PROFILES TABLE (Linked to auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT NOT NULL,
-  brand_name TEXT,
+  username TEXT UNIQUE,
+  full_name TEXT,
+  brand_name TEXT DEFAULT 'Independent Brand',
+  bio TEXT,
   avatar_url TEXT,
+  role TEXT DEFAULT 'creator' CHECK (role IN ('user', 'creator', 'admin')),
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -20,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.projects (
   garment_id TEXT NOT NULL,
   garment_color TEXT NOT NULL,
   layers JSONB DEFAULT '{"FRONT":[],"BACK":[],"LEFT_SLEEVE":[],"RIGHT_SLEEVE":[]}'::jsonb NOT NULL,
+  thumbnail_url TEXT,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -30,46 +39,79 @@ CREATE TABLE IF NOT EXISTS public.mockups (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
-  garment_name TEXT NOT NULL,
-  garment_color TEXT NOT NULL,
-  camera_preset TEXT NOT NULL,
-  environment_preset TEXT NOT NULL,
-  image_url TEXT NOT NULL,
+  garment_id TEXT,
+  garment_color TEXT,
+  camera_preset TEXT DEFAULT 'front',
+  environment_preset TEXT DEFAULT 'studio',
+  image_url TEXT,
+  video_url TEXT,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 4. PRODUCTS TABLE (SKU manager, size runs & unit margins)
+-- 4. PRODUCTS TABLE (SKU catalog and unit economics)
 CREATE TABLE IF NOT EXISTS public.products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
   category TEXT NOT NULL,
-  sku TEXT NOT NULL,
+  sku TEXT,
+  description TEXT,
   retail_price NUMERIC(10, 2) NOT NULL,
   blank_cost NUMERIC(10, 2) NOT NULL,
   print_cost NUMERIC(10, 2) NOT NULL,
-  shipping_cost NUMERIC(10, 2) NOT NULL,
-  profit_margin NUMERIC(5, 2) NOT NULL,
-  sizes JSONB DEFAULT '[]'::jsonb NOT NULL,
-  image_url TEXT,
+  packaging_shipping NUMERIC(10, 2) NOT NULL,
+  gross_profit NUMERIC(10, 2) NOT NULL,
+  margin_percent NUMERIC(5, 2) NOT NULL,
+  sizes JSONB DEFAULT '[]'::jsonb,
+  colors JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- 5. MARKETPLACE DROPS (Community apparel drops & showcases)
+-- 5. GANG SHEETS TABLE (DTF roll layouts and nested placements)
+CREATE TABLE IF NOT EXISTS public.gang_sheets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  roll_width NUMERIC(5, 2) NOT NULL,
+  roll_length NUMERIC(6, 2) NOT NULL,
+  margin NUMERIC(4, 2) DEFAULT 0.25 NOT NULL,
+  spacing NUMERIC(4, 2) DEFAULT 0.25 NOT NULL,
+  efficiency_percent NUMERIC(5, 2) NOT NULL,
+  items_count INT DEFAULT 0 NOT NULL,
+  placements JSONB DEFAULT '[]'::jsonb NOT NULL,
+  pdf_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 6. MARKETPLACE DROPS TABLE (Community drop showroom & 3D inspector)
 CREATE TABLE IF NOT EXISTS public.marketplace_drops (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   creator_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
+  brand_name TEXT NOT NULL,
+  garment_type TEXT NOT NULL,
   description TEXT,
-  garment_id TEXT NOT NULL,
-  garment_color TEXT NOT NULL,
-  layers JSONB DEFAULT '{}'::jsonb NOT NULL,
+  tags TEXT[] DEFAULT '{}'::text[],
   thumbnail_url TEXT,
-  price_usd NUMERIC(10, 2) NOT NULL,
   likes_count INT DEFAULT 0 NOT NULL,
   is_public BOOLEAN DEFAULT true NOT NULL,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 7. BRAND SETTINGS TABLE (Brand identity, defaults, and margin profiles)
+CREATE TABLE IF NOT EXISTS public.brand_settings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  brand_name TEXT DEFAULT 'Independent Brand' NOT NULL,
+  logo_url TEXT,
+  primary_color TEXT DEFAULT '#E2F952' NOT NULL,
+  default_markup_percent NUMERIC(5, 2) DEFAULT 60.00 NOT NULL,
+  target_margin_percent NUMERIC(5, 2) DEFAULT 65.00 NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 -- ==============================================================================
@@ -81,66 +123,116 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mockups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.gang_sheets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.marketplace_drops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.brand_settings ENABLE ROW LEVEL SECURITY;
 
 -- PROFILES Policies
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by everyone" 
   ON public.profiles FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile" 
   ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" 
   ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- PROJECTS Policies
+DROP POLICY IF EXISTS "Users can view their own projects" ON public.projects;
 CREATE POLICY "Users can view their own projects" 
   ON public.projects FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own projects" ON public.projects;
 CREATE POLICY "Users can create their own projects" 
   ON public.projects FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own projects" ON public.projects;
 CREATE POLICY "Users can update their own projects" 
   ON public.projects FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own projects" ON public.projects;
 CREATE POLICY "Users can delete their own projects" 
   ON public.projects FOR DELETE USING (auth.uid() = user_id);
 
 -- MOCKUPS Policies
+DROP POLICY IF EXISTS "Users can view their own mockups" ON public.mockups;
 CREATE POLICY "Users can view their own mockups" 
   ON public.mockups FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own mockups" ON public.mockups;
 CREATE POLICY "Users can create their own mockups" 
   ON public.mockups FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own mockups" ON public.mockups;
 CREATE POLICY "Users can delete their own mockups" 
   ON public.mockups FOR DELETE USING (auth.uid() = user_id);
 
 -- PRODUCTS Policies
+DROP POLICY IF EXISTS "Users can view their own products" ON public.products;
 CREATE POLICY "Users can view their own products" 
   ON public.products FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own products" ON public.products;
 CREATE POLICY "Users can create their own products" 
   ON public.products FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own products" ON public.products;
 CREATE POLICY "Users can update their own products" 
   ON public.products FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own products" ON public.products;
 CREATE POLICY "Users can delete their own products" 
   ON public.products FOR DELETE USING (auth.uid() = user_id);
 
+-- GANG SHEETS Policies
+DROP POLICY IF EXISTS "Users can view their own gang sheets" ON public.gang_sheets;
+CREATE POLICY "Users can view their own gang sheets" 
+  ON public.gang_sheets FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create their own gang sheets" ON public.gang_sheets;
+CREATE POLICY "Users can create their own gang sheets" 
+  ON public.gang_sheets FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own gang sheets" ON public.gang_sheets;
+CREATE POLICY "Users can update their own gang sheets" 
+  ON public.gang_sheets FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete their own gang sheets" ON public.gang_sheets;
+CREATE POLICY "Users can delete their own gang sheets" 
+  ON public.gang_sheets FOR DELETE USING (auth.uid() = user_id);
+
 -- MARKETPLACE DROPS Policies
+DROP POLICY IF EXISTS "Public drops are viewable by everyone" ON public.marketplace_drops;
 CREATE POLICY "Public drops are viewable by everyone" 
   ON public.marketplace_drops FOR SELECT USING (is_public = true OR auth.uid() = creator_id);
 
+DROP POLICY IF EXISTS "Creators can insert their own drops" ON public.marketplace_drops;
 CREATE POLICY "Creators can insert their own drops" 
   ON public.marketplace_drops FOR INSERT WITH CHECK (auth.uid() = creator_id);
 
+DROP POLICY IF EXISTS "Creators can update their own drops" ON public.marketplace_drops;
 CREATE POLICY "Creators can update their own drops" 
   ON public.marketplace_drops FOR UPDATE USING (auth.uid() = creator_id);
 
+DROP POLICY IF EXISTS "Creators can delete their own drops" ON public.marketplace_drops;
 CREATE POLICY "Creators can delete their own drops" 
   ON public.marketplace_drops FOR DELETE USING (auth.uid() = creator_id);
+
+-- BRAND SETTINGS Policies
+DROP POLICY IF EXISTS "Users can view their own brand settings" ON public.brand_settings;
+CREATE POLICY "Users can view their own brand settings" 
+  ON public.brand_settings FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create their own brand settings" ON public.brand_settings;
+CREATE POLICY "Users can create their own brand settings" 
+  ON public.brand_settings FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own brand settings" ON public.brand_settings;
+CREATE POLICY "Users can update their own brand settings" 
+  ON public.brand_settings FOR UPDATE USING (auth.uid() = user_id);
 
 -- ==============================================================================
 -- AUTOMATIC PROFILE CREATION TRIGGER ON AUTH SIGNUP
@@ -154,7 +246,16 @@ BEGIN
     new.email,
     COALESCE(new.raw_user_meta_data->>'brand_name', 'Independent Brand'),
     new.raw_user_meta_data->>'avatar_url'
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.brand_settings (user_id, brand_name)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'brand_name', 'Independent Brand')
+  )
+  ON CONFLICT (user_id) DO NOTHING;
+
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -163,3 +264,16 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_mockups_user_id ON public.mockups(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_user_id ON public.products(user_id);
+CREATE INDEX IF NOT EXISTS idx_gang_sheets_user_id ON public.gang_sheets(user_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_drops_is_public ON public.marketplace_drops(is_public);
+CREATE INDEX IF NOT EXISTS idx_marketplace_drops_creator_id ON public.marketplace_drops(creator_id);
+
+-- Explicitly grant usage and permissions to roles
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
