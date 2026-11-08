@@ -9,6 +9,7 @@ interface StudioState {
   project: StudioProject;
   activeSurface: SurfaceType;
   selectedLayerId: string | null;
+  viewMode: '2D' | '3D' | 'SPLIT';
   zoom: number;
   pan: { x: number; y: number };
   isSaving: boolean;
@@ -25,6 +26,7 @@ interface StudioState {
   setGarmentColor: (color: string) => void;
   setActiveSurface: (surface: SurfaceType) => void;
   setSelectedLayerId: (id: string | null) => void;
+  setViewMode: (mode: '2D' | '3D' | 'SPLIT') => void;
   setZoom: (zoom: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
 
@@ -32,6 +34,11 @@ interface StudioState {
   addTextLayer: (customProps?: Partial<TextLayer>) => void;
   addImageLayer: (src: string, originalWidth: number, originalHeight: number, name?: string) => void;
   updateLayer: (id: string, updates: Partial<DesignLayer>) => void;
+  nudgeLayer: (id: string, dxPercent: number, dyPercent: number) => void;
+  scaleLayer: (id: string, deltaPercent: number) => void;
+  rotateLayer: (id: string, deltaDegrees: number) => void;
+  centerLayer: (id: string, axis?: 'h' | 'v' | 'both') => void;
+  alignLayer: (id: string, alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
   duplicateLayer: (id: string) => void;
   deleteLayer: (id: string) => void;
   reorderLayers: (surface: SurfaceType, startIndex: number, endIndex: number) => void;
@@ -137,6 +144,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   project: initialProject,
   activeSurface: 'FRONT',
   selectedLayerId: 'layer-brand-text',
+  viewMode: '2D',
   zoom: 1,
   pan: { x: 0, y: 0 },
   isSaving: false,
@@ -220,6 +228,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   setSelectedLayerId: (id) => {
     set({ selectedLayerId: id });
+  },
+
+  setViewMode: (viewMode) => {
+    set({ viewMode });
   },
 
   setZoom: (zoom) => {
@@ -366,6 +378,87 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
 
     get().saveProjectLocally();
+  },
+
+  nudgeLayer: (id, dxPercent, dyPercent) => {
+    const { project, activeSurface } = get();
+    const surfaceLayers = project.layers[activeSurface] || [];
+    const target = surfaceLayers.find((l) => l.id === id);
+    if (!target || target.isLocked) return;
+
+    const newX = Math.round(Math.min(Math.max(target.x + dxPercent, 0), 100));
+    const newY = Math.round(Math.min(Math.max(target.y + dyPercent, 0), 100));
+
+    get().updateLayer(id, { x: newX, y: newY });
+  },
+
+  scaleLayer: (id, deltaPercent) => {
+    const { project, activeSurface } = get();
+    const surfaceLayers = project.layers[activeSurface] || [];
+    const target = surfaceLayers.find((l) => l.id === id);
+    if (!target || target.isLocked) return;
+
+    const aspectRatio = target.width / (target.height || 1);
+    const newWidth = Math.max(5, Math.min(95, target.width + deltaPercent));
+    const newHeight = Math.max(5, Math.min(95, newWidth / aspectRatio));
+
+    get().updateLayer(id, { width: Math.round(newWidth), height: Math.round(newHeight) });
+  },
+
+  rotateLayer: (id, deltaDegrees) => {
+    const { project, activeSurface } = get();
+    const surfaceLayers = project.layers[activeSurface] || [];
+    const target = surfaceLayers.find((l) => l.id === id);
+    if (!target || target.isLocked) return;
+
+    let newRotation = (target.rotation + deltaDegrees) % 360;
+    if (newRotation < 0) newRotation += 360;
+
+    get().updateLayer(id, { rotation: newRotation });
+  },
+
+  centerLayer: (id, axis = 'both') => {
+    const { project, activeSurface } = get();
+    const surfaceLayers = project.layers[activeSurface] || [];
+    const target = surfaceLayers.find((l) => l.id === id);
+    if (!target || target.isLocked) return;
+
+    const updates: Partial<DesignLayer> = {};
+    if (axis === 'h' || axis === 'both') updates.x = 50;
+    if (axis === 'v' || axis === 'both') updates.y = 50;
+
+    get().updateLayer(id, updates);
+  },
+
+  alignLayer: (id, alignment) => {
+    const { project, activeSurface } = get();
+    const surfaceLayers = project.layers[activeSurface] || [];
+    const target = surfaceLayers.find((l) => l.id === id);
+    if (!target || target.isLocked) return;
+
+    const updates: Partial<DesignLayer> = {};
+    switch (alignment) {
+      case 'left':
+        updates.x = Math.round(target.width / 2 + 8);
+        break;
+      case 'center':
+        updates.x = 50;
+        break;
+      case 'right':
+        updates.x = Math.round(100 - target.width / 2 - 8);
+        break;
+      case 'top':
+        updates.y = Math.round(target.height / 2 + 10);
+        break;
+      case 'middle':
+        updates.y = 50;
+        break;
+      case 'bottom':
+        updates.y = Math.round(100 - target.height / 2 - 10);
+        break;
+    }
+
+    get().updateLayer(id, updates);
   },
 
   duplicateLayer: (id) => {

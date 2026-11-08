@@ -3,8 +3,13 @@
 import { useMockupStore } from '@/stores/mockup-store';
 import { EnvironmentPreset } from '@/types/mockup';
 
-export function StudioEnvironment() {
-  const { environmentPreset } = useMockupStore();
+interface StudioEnvironmentProps {
+  preset?: EnvironmentPreset;
+}
+
+export function StudioEnvironment({ preset }: StudioEnvironmentProps = {}) {
+  const { environmentPreset: storePreset } = useMockupStore();
+  const env = preset || storePreset;
 
   const getLighting = (env: EnvironmentPreset) => {
     switch (env) {
@@ -56,7 +61,7 @@ export function StudioEnvironment() {
     }
   };
 
-  const config = getLighting(environmentPreset);
+  const config = getLighting(env);
 
   return (
     <>

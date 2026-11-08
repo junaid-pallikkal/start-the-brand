@@ -7,11 +7,10 @@ import {
   Redo2,
   Box,
   Download,
-  Save,
   Check,
   ChevronLeft,
-  Share2,
-  Printer,
+  Columns2,
+  Square,
   Sparkles,
 } from 'lucide-react';
 import { useStudioStore } from '@/stores/studio-store';
@@ -23,9 +22,11 @@ export function StudioHeader() {
   const {
     project,
     activeSurface,
+    viewMode,
     isSaving,
     lastSavedAt,
     setProjectName,
+    setViewMode,
     undo,
     redo,
     canUndo,
@@ -93,59 +94,83 @@ export function StudioHeader() {
             className="flex items-center gap-2 group text-left"
             title="Click to rename project"
           >
-            <span className="font-bold text-white uppercase group-hover:text-brand-volt transition-colors truncate max-w-[200px] sm:max-w-xs">
+            <span className="font-bold text-white uppercase group-hover:text-brand-volt transition-colors truncate max-w-[160px] sm:max-w-xs">
               {project.name}
             </span>
             <span className="text-[10px] text-zinc-500 font-normal">
-              // CAD
+              // STUDIO
             </span>
           </button>
         )}
       </div>
 
-      {/* Center: Undo / Redo & Save Status */}
-      <div className="hidden sm:flex items-center gap-2">
+      {/* Center: Mode Switcher (2D Flat CAD vs 3D Interactive vs Split) */}
+      <div className="flex items-center gap-1 rounded bg-[#07080A] p-1 border border-border">
         <button
-          onClick={undo}
-          disabled={!canUndo()}
-          className="rounded p-1.5 text-zinc-400 hover:bg-surface hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
-          title="Undo (Ctrl+Z)"
+          onClick={() => setViewMode('2D')}
+          className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition-all ${
+            viewMode === '2D'
+              ? 'bg-brand-volt text-black shadow-sm'
+              : 'text-zinc-400 hover:text-white hover:bg-surface'
+          }`}
+          title="2D Flat CAD Canvas View"
         >
-          <Undo2 className="h-4 w-4" />
-        </button>
-        <button
-          onClick={redo}
-          disabled={!canRedo()}
-          className="rounded p-1.5 text-zinc-400 hover:bg-surface hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo2 className="h-4 w-4" />
+          <Square className="h-3.5 w-3.5" />
+          <span>2D CAD</span>
         </button>
 
-        <div className="h-3 w-[1px] bg-border mx-2" />
-
-        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-          {isSaving ? (
-            <span className="text-amber-400">Saving...</span>
-          ) : (
-            <>
-              <Check className="h-3 w-3 text-emerald-400" />
-              <span>Auto-saved</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Right: 3D Viewport Toggle & Export Actions */}
-      <div className="flex items-center gap-2">
-        <Link
-          href={`/mockups?projectId=${project.id}`}
-          className="flex items-center gap-1.5 rounded-sm border border-brand-volt/40 bg-brand-volt/10 px-3 py-1 font-bold text-brand-volt hover:bg-brand-volt hover:text-black transition-all"
+        <button
+          onClick={() => setViewMode('3D')}
+          className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition-all ${
+            viewMode === '3D'
+              ? 'bg-brand-volt text-black shadow-sm'
+              : 'text-zinc-400 hover:text-white hover:bg-surface'
+          }`}
+          title="100% 3D Garment Studio (Edit cloth & designs directly in 3D)"
         >
           <Box className="h-3.5 w-3.5" />
-          <span>INSPECT IN 3D</span>
-        </Link>
+          <span>3D CLOTH</span>
+        </button>
 
+        <button
+          onClick={() => setViewMode('SPLIT')}
+          className={`hidden md:flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition-all ${
+            viewMode === 'SPLIT'
+              ? 'bg-brand-volt text-black shadow-sm'
+              : 'text-zinc-400 hover:text-white hover:bg-surface'
+          }`}
+          title="Side-by-side 2D and 3D View"
+        >
+          <Columns2 className="h-3.5 w-3.5" />
+          <span>SPLIT VIEW</span>
+        </button>
+      </div>
+
+      {/* Right: Undo/Redo & Export Actions */}
+      <div className="flex items-center gap-2">
+        {/* Undo / Redo */}
+        <div className="hidden sm:flex items-center gap-1">
+          <button
+            onClick={undo}
+            disabled={!canUndo()}
+            className="rounded p-1 text-zinc-400 hover:bg-surface hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo()}
+            className="rounded p-1 text-zinc-400 hover:bg-surface hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="h-3 w-[1px] bg-border mx-1 hidden sm:block" />
+
+        {/* Print PNG Export */}
         <button
           onClick={handleExportPrintPNG}
           className="flex items-center gap-1.5 rounded-sm border border-border bg-surface px-3 py-1 font-semibold text-white hover:border-zinc-500 hover:bg-surface/80 transition-colors"
