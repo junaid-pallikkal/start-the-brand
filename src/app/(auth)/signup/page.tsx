@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Lock, Mail, User, Shirt } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 export default function SignupPage() {
@@ -16,7 +17,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !brandName) {
       toast.error('Please fill in email, password, and brand name');
@@ -24,7 +25,47 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const supabase = createClient();
+      if (supabase) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              brand_name: brandName,
+              username: email.split('@')[0],
+            },
+          },
+        });
+
+        if (error) {
+          toast.error(error.message);
+          setLoading(false);
+          return;
+        }
+
+        if (data.user) {
+          setUser({
+            id: data.user.id,
+            email: data.user.email || email,
+            username: email.split('@')[0],
+            fullName: fullName || email.split('@')[0],
+            brandName: brandName.toUpperCase(),
+            role: 'user',
+            isGuest: false,
+            createdAt: new Date().toISOString(),
+          });
+          setLoading(false);
+          toast.success('Account created in Supabase! Welcome to StartTheBrand');
+          router.push('/dashboard');
+          return;
+        }
+      }
+
+      // Local fallback
       setUser({
         id: `usr_${Date.now().toString(36)}`,
         email,
@@ -38,7 +79,11 @@ export default function SignupPage() {
       setLoading(false);
       toast.success('Account created! Welcome to StartTheBrand');
       router.push('/dashboard');
-    }, 400);
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      toast.error(err.message || 'Error creating account');
+      setLoading(false);
+    }
   };
 
   return (

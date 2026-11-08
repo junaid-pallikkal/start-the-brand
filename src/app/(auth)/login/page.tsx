@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Lock, Mail, ShieldAlert, Sparkles, UserCheck } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -14,7 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleEmailLogin = (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast.error('Please enter both email and password');
@@ -22,7 +23,40 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const supabase = createClient();
+      if (supabase) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          toast.error(error.message);
+          setLoading(false);
+          return;
+        }
+
+        if (data.user) {
+          setUser({
+            id: data.user.id,
+            email: data.user.email || email,
+            username: data.user.user_metadata?.username || email.split('@')[0],
+            fullName: data.user.user_metadata?.full_name || email.split('@')[0],
+            brandName: data.user.user_metadata?.brand_name || 'Independent Brand',
+            role: (data.user.app_metadata?.role as any) || 'user',
+            isGuest: false,
+            createdAt: data.user.created_at,
+          });
+          setLoading(false);
+          toast.success('Signed in with Supabase successfully');
+          router.push('/dashboard');
+          return;
+        }
+      }
+
+      // Local fallback if Supabase client is not configured yet
       setUser({
         id: `usr_${Date.now().toString(36)}`,
         email,
@@ -36,7 +70,11 @@ export default function LoginPage() {
       setLoading(false);
       toast.success('Signed in successfully');
       router.push('/dashboard');
-    }, 400);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      toast.error(err.message || 'Error signing in');
+      setLoading(false);
+    }
   };
 
   const handleGuestLogin = () => {
