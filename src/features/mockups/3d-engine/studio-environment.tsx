@@ -2,6 +2,7 @@
 
 import { useMockupStore } from '@/stores/mockup-store';
 import { EnvironmentPreset } from '@/types/mockup';
+import { BackgroundModels } from './background-models';
 
 interface StudioEnvironmentProps {
   preset?: EnvironmentPreset;
@@ -89,11 +90,8 @@ export function StudioEnvironment({ preset }: StudioEnvironmentProps = {}) {
         color={config.rimColor}
       />
 
-      {/* Soft Ground Contact Shadow Plane */}
-      <mesh position={[0, -1.2, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[12, 12]} />
-        <shadowMaterial opacity={0.35} />
-      </mesh>
+      {/* 3D Background Models & Sets */}
+      <BackgroundModels env={env} />
     </>
   );
 }

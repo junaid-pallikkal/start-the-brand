@@ -24,12 +24,14 @@ import {
   Crosshair,
   Trash2,
   Plus,
+  Box,
+  Layers,
 } from 'lucide-react';
 import { useMockupStore } from '@/stores/mockup-store';
 import { useStudioStore } from '@/stores/studio-store';
 import { DEFAULT_GARMENTS } from '@/constants/default-garments';
 import { APPAREL_COLOR_PRESETS } from '@/constants/color-presets';
-import { CameraPreset, EnvironmentPreset } from '@/types/mockup';
+import { CameraPreset, EnvironmentPreset, BackgroundModelType } from '@/types/mockup';
 import { toast } from 'sonner';
 
 interface MockupControlsProps {
@@ -42,6 +44,9 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
     garmentColor,
     cameraPreset,
     environmentPreset,
+    backgroundModel,
+    showSoftboxes,
+    showFloorGrid,
     pbr,
     autoRotate,
     wireframe,
@@ -49,6 +54,9 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
     setGarmentColor,
     setCameraPreset,
     setEnvironmentPreset,
+    setBackgroundModel,
+    setShowSoftboxes,
+    setShowFloorGrid,
     updatePBR,
     setAutoRotate,
     setWireframe,
@@ -69,7 +77,7 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
     deleteLayer,
   } = useStudioStore();
 
-  const [activeTab, setActiveTab] = useState<'garment' | 'design' | 'camera' | 'material'>('garment');
+  const [activeTab, setActiveTab] = useState<'garment' | 'design' | 'stage' | 'camera' | 'material'>('garment');
 
   const surfaceLayers = project.layers[activeSurface] || [];
   const selectedLayer = surfaceLayers.find((l) => l.id === selectedLayerId);
@@ -87,6 +95,15 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
     { id: 'studio_clean', label: 'Studio Clean' },
     { id: 'urban_street', label: 'Urban Street' },
     { id: 'minimal_gray', label: 'Minimal Gray' },
+  ];
+
+  const stageOptions: { id: BackgroundModelType; name: string; desc: string }[] = [
+    { id: 'podium', name: 'Showroom Plinth', desc: 'Bevelled podium with volt glow ring' },
+    { id: 'studio_cyc', name: 'Studio Cyc Wall', desc: 'Infinite curved backdrop wall' },
+    { id: 'mannequin', name: 'Mannequin Stand', desc: 'Cast-iron base & wood hanger neck' },
+    { id: 'concrete_runway', name: 'Concrete Runway', desc: 'Industrial street stage + hazard lines' },
+    { id: 'neon_gallery', name: 'Neon Pillars', desc: 'Brutalist pillars with vertical LED strips' },
+    { id: 'none', name: 'Pure Floating', desc: 'Minimal clean floating shadow' },
   ];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,11 +142,12 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
         </span>
       </div>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-4 border-b border-border bg-[#08090C] text-[10px]">
+      {/* 5 Navigation Tabs */}
+      <div className="grid grid-cols-5 border-b border-border bg-[#08090C] text-[10px]">
         {[
           { id: 'garment', label: 'Cloth' },
           { id: 'design', label: 'Design' },
+          { id: 'stage', label: 'Stage' },
           { id: 'camera', label: 'Camera' },
           { id: 'material', label: 'Shader' },
         ].map((tab) => (
@@ -394,7 +412,75 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
           </div>
         )}
 
-        {/* TAB 3: CAMERA PRESETS */}
+        {/* TAB 3: STAGE & BACKGROUND MODELS */}
+        {activeTab === 'stage' && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-2 flex items-center gap-1.5">
+                <Box className="h-3.5 w-3.5 text-brand-volt" />
+                <span>3D Background Model / Stage Set</span>
+              </label>
+              <div className="space-y-1.5">
+                {stageOptions.map((opt) => {
+                  const isSelected = backgroundModel === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => setBackgroundModel(opt.id)}
+                      className={`w-full text-left rounded p-2 text-xs transition-all border ${
+                        isSelected
+                          ? 'border-brand-volt bg-brand-volt/10 text-white'
+                          : 'border-border/60 bg-[#07080A] text-zinc-400 hover:text-white hover:border-zinc-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold">{opt.name}</span>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-brand-volt" />}
+                      </div>
+                      <span className="text-[10px] text-zinc-500 block mt-0.5">{opt.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Stage Props & Toggles */}
+            <div className="border-t border-border pt-4 space-y-2">
+              <label className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-2">
+                Studio Environment Elements
+              </label>
+              <div className="flex items-center justify-between p-2 rounded bg-surface border border-border">
+                <span className="text-zinc-300 text-xs">Photo Studio Softbox Lights</span>
+                <button
+                  onClick={() => setShowSoftboxes(!showSoftboxes)}
+                  className={`rounded px-2.5 py-0.5 text-[10px] font-bold border transition-colors ${
+                    showSoftboxes
+                      ? 'border-brand-volt bg-brand-volt text-black'
+                      : 'border-border bg-[#07080A] text-zinc-500'
+                  }`}
+                >
+                  {showSoftboxes ? 'VISIBLE' : 'HIDDEN'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded bg-surface border border-border">
+                <span className="text-zinc-300 text-xs">Floor CAD Grid & Markings</span>
+                <button
+                  onClick={() => setShowFloorGrid(!showFloorGrid)}
+                  className={`rounded px-2.5 py-0.5 text-[10px] font-bold border transition-colors ${
+                    showFloorGrid
+                      ? 'border-brand-volt bg-brand-volt text-black'
+                      : 'border-border bg-[#07080A] text-zinc-500'
+                  }`}
+                >
+                  {showFloorGrid ? 'VISIBLE' : 'HIDDEN'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: CAMERA PRESETS */}
         {activeTab === 'camera' && (
           <div className="space-y-4">
             <div>
@@ -459,7 +545,7 @@ export function MockupControls({ onCapture }: MockupControlsProps) {
           </div>
         )}
 
-        {/* TAB 4: PBR FABRIC SHADER */}
+        {/* TAB 5: PBR FABRIC SHADER */}
         {activeTab === 'material' && (
           <div className="space-y-4">
             <div>

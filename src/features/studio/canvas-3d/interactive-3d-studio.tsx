@@ -128,6 +128,11 @@ export function Interactive3DStudio() {
     deleteLayer,
   } = useStudioStore();
 
+  const {
+    backgroundModel,
+    setBackgroundModel,
+  } = useMockupStore();
+
   const [cameraAngle, setCameraAngle] = useState<CameraPreset>('hero');
   const [autoRotate, setAutoRotate] = useState(false);
   const [wireframe, setWireframe] = useState(false);
@@ -280,6 +285,23 @@ export function Interactive3DStudio() {
           >
             Zoom
           </button>
+
+          <div className="h-4 w-[1px] bg-border mx-1" />
+
+          {/* 3D Stage Background Model Switcher */}
+          <select
+            value={backgroundModel}
+            onChange={(e) => setBackgroundModel(e.target.value as any)}
+            className="rounded bg-[#07080A] border border-border px-1.5 py-0.5 text-[10px] text-zinc-300 focus:outline-none focus:border-brand-volt cursor-pointer"
+            title="3D Background Stage Model"
+          >
+            <option value="podium">Stage: Podium</option>
+            <option value="studio_cyc">Stage: Cyc Wall</option>
+            <option value="mannequin">Stage: Mannequin</option>
+            <option value="concrete_runway">Stage: Runway</option>
+            <option value="neon_gallery">Stage: Neon Pillars</option>
+            <option value="none">Stage: Floating</option>
+          </select>
 
           <div className="h-4 w-[1px] bg-border mx-1" />
 
