@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VirtualFit: Spatial Try-On</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; }
+    
+    :root {
+      --ease: cubic-bezier(.2, .8, .2, 1);
+      --sans: "Inter", system-ui, -apple-system, sans-serif;
+      --MH: min(78vh, 62vw);
+      --CW: min(14.8vw, 33vh);
+      --room: url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080623_c94c85a3-23d5-4a0c-afff-41be1b5b8191.png&w=2400&q=85");
+      --model: url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080717_e02cb856-b812-4c9b-9b86-8a741c7f65eb.png&w=2688&q=85");
+      --garm: url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080719_f5a4cca2-cf42-4957-ab3b-ddec34d2b71a.png&w=2048&q=85");
+      --volt: #E2F952;
+    }
+
+    @media (max-width: 767px) {
+      :root {
+        --MH: min(62vh, 128vw);
+        --CW: min(30vw, 170px);
+      }
+    }
+
+    body {
+      background: #0A0B0D;
+      color: #fff;
+      font-family: var(--sans);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    @media (pointer: fine) {
+      html, body, button {
+        cursor: none;
+      }
+    }
+
+    /* 1. ROOM */
+    .room {
+      position: fixed;
+      inset: -3%;
+      background: var(--room) center/cover;
+      filter: blur(2.5px) saturate(1.05);
+      transform: scale(1.08);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .room::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(70% 60% at 50% 45%, rgba(10,11,13,.68), rgba(7,8,10,.92));
+    }
+
+    /* 2. GHOST WORD FIT */
+    .ghost {
+      position: fixed;
+      top: calc(50% - var(--MH) * 0.42);
+      left: 50%;
+      transform: translate(-50%, 0);
+      z-index: 2;
+      font-size: calc(var(--MH) * 0.42);
+      font-weight: 900;
+      line-height: 0.8;
+      letter-spacing: -0.04em;
+      color: rgba(226, 249, 82, 0.12);
+      -webkit-text-stroke: 1.5px rgba(226, 249, 82, 0.25);
+      text-shadow: 0 0 60px rgba(226, 249, 82, 0.16);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .ghost span {
+      display: inline-block;
+      transition: transform 0.3s;
+    }
+
+    /* 3. GLASS MATERIAL (Streetwear Dark Glass in Previous Colour Theme) */
+    .glass {
+      background: linear-gradient(155deg, rgba(24, 27, 34, 0.75), rgba(12, 13, 17, 0.6) 48%, rgba(18, 20, 26, 0.7));
+      backdrop-filter: blur(22px) saturate(1.5);
+      -webkit-backdrop-filter: blur(22px) saturate(1.5);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 20px 50px -24px rgba(0, 0, 0, 0.85);
+    }
+
+    /* 4. TABS */
+    .tabs {
+      position: fixed;
+      top: 4.2vh;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      padding: 5px;
+      border-radius: 999px;
+      gap: 2px;
+    }
+    .tabs button {
+      position: relative;
+      z-index: 10;
+      height: 38px;
+      padding: 0 22px;
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.7);
+      transition: color 0.3s;
+    }
+    .tabs button.active {
+      color: #000;
+      font-weight: 700;
+    }
+    .pill {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      left: 0;
+      border-radius: 999px;
+      background: var(--volt);
+      box-shadow: 0 4px 18px -4px rgba(226, 249, 82, 0.5);
+      transition: transform 0.6s var(--ease), width 0.6s var(--ease);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* 5. RAIL */
+    .rail {
+      position: fixed;
+      left: max(18px, 1.8vw);
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 10px;
+      border-radius: 999px;
+    }
+    .rail button {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.75);
+      transition: background 0.3s, color 0.3s, transform 0.2s;
+    }
+    .rail button:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+    .rail button.active {
+      background: var(--volt);
+      color: #000;
+      box-shadow: 0 4px 14px -4px rgba(226, 249, 82, 0.5);
+    }
+    .rail svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2.2;
+    }
+
+    /* 6. STAGE & ARC CARDS */
+    .stage {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      touch-action: pan-y;
+    }
+    .card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: var(--CW);
+      height: calc(var(--CW) * 1.42);
+      margin-top: calc(var(--CW) * -0.71);
+      margin-left: calc(var(--CW) * -0.5);
+      border-radius: 22px;
+      overflow: hidden;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      transition: box-shadow 0.3s;
+    }
+    .card .g {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: 5%;
+      height: 66%;
+      background-image: var(--garm);
+      background-size: 320% 212.5%;
+      filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.6));
+    }
+    .card .name {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      bottom: 17%;
+      text-align: center;
+      font-size: calc(var(--CW) * 0.068);
+      font-weight: 500;
+      color: #fff;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.6);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card .price {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      bottom: 7%;
+      text-align: center;
+      font-size: calc(var(--CW) * 0.095);
+      font-weight: 700;
+      color: var(--volt);
+      text-shadow: 0 0 12px rgba(226, 249, 82, 0.4);
+    }
+    .card .sheen {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 40%, rgba(226, 249, 82, 0.35) 50%, transparent 60%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+    .card:hover .sheen {
+      opacity: 1;
+    }
+
+    /* 7. MODEL & SCAN */
+    .model {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      height: var(--MH);
+      aspect-ratio: 524 / 1360;
+      z-index: 50;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #mCur, #mNext {
+      position: absolute;
+      inset: 0;
+      background-image: var(--model);
+      background-size: 513% 111.76%;
+      background-position-y: 100%;
+    }
+    #mNext {
+      opacity: 0;
+      clip-path: inset(0 0 100% 0);
+    }
+    .model .grid {
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(0deg, transparent 0 5px, rgba(226, 249, 82, 0.3) 5px 6px);
+      mix-blend-mode: screen;
+      clip-path: inset(0 0 100% 0);
+      pointer-events: none;
+    }
+    .model .scan {
+      position: absolute;
+      left: -14%;
+      right: -14%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, #E2F952 18%, #FFFFFF 50%, #E2F952 82%, transparent 100%);
+      box-shadow: 0 0 20px 4px rgba(226, 249, 82, 0.95), 0 0 60px 12px rgba(226, 249, 82, 0.5);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .model .scan::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(var(--MH) * 0.12);
+      background: linear-gradient(to top, rgba(226, 249, 82, 0.32), transparent);
+    }
+
+    /* 8. ARROW BUTTONS */
+    .arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 30;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      transition: border-color 0.3s, color 0.3s;
+    }
+    .arrow:hover {
+      border-color: var(--volt);
+      color: var(--volt);
+    }
+    .arrow.left {
+      left: calc(max(18px, 1.8vw) + 76px);
+    }
+    .arrow.right {
+      right: max(18px, 1.8vw);
+    }
+
+    /* 9. BUY CARD */
+    .buy {
+      position: fixed;
+      bottom: 4.6vh;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      width: min(640px, calc(100vw - 32px));
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 12px 22px 12px 12px;
+      border-radius: 24px;
+      color: #fff;
+    }
+    .buy .thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      background-color: rgba(255, 255, 255, 0.1);
+      background-image: var(--garm);
+      background-size: 320% 212.5%;
+      flex-shrink: 0;
+    }
+    .buy .info {
+      display: flex;
+      flex-direction: column;
+      min-width: 130px;
+    }
+    .buy .ln {
+      height: 1.15em;
+      overflow: hidden;
+      position: relative;
+    }
+    .buy .ln.name {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .buy .ln.price {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--volt);
+      margin-top: 2px;
+    }
+    .buy .size-box, .buy .color-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .buy .lbl {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .buy .chips {
+      display: flex;
+      gap: 5px;
+    }
+    .buy .chip {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .buy .chip.active {
+      background: var(--volt);
+      color: #000;
+    }
+    .buy .chip:active {
+      transform: scale(0.9);
+    }
+    .buy .dots {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    .buy .dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .buy .dot.active {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 2px var(--volt), 0 0 0 4px rgba(0, 0, 0, 0.6);
+    }
+
+    /* 10. CURSOR */
+    .cur {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 58px;
+      height: 58px;
+      margin-top: -29px;
+      margin-left: -29px;
+      z-index: 100;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cur-ring {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1.5px solid rgba(226, 249, 82, 0.95);
+      background: rgba(18, 20, 26, 0.65);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.5s var(--ease), background 0.4s var(--ease), border-color 0.4s var(--ease);
+    }
+    .cur-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--volt);
+      transition: opacity 0.4s var(--ease);
+    }
+    .cur-lbl {
+      position: absolute;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
+    }
+    .cur-lbl.try {
+      color: #000;
+    }
+    .cur-lbl.drag {
+      color: #fff;
+    }
+
+    /* RESPONSIVE PHONES (<= 767px) */
+    @media (max-width: 767px) {
+      .tabs {
+        width: calc(100vw - 32px);
+        overflow-x: auto;
+      }
+      .tabs button {
+        height: 32px;
+        padding: 0 13px;
+        font-size: 12px;
+      }
+      .rail {
+        left: 10px;
+        top: auto;
+        bottom: calc(4.6vh + 150px);
+        transform: none;
+      }
+      .rail button {
+        width: 34px;
+        height: 34px;
+      }
+      .arrow {
+        display: none !important;
+      }
+      .buy {
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .cur {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. ROOM -->
+  <div class="room" id="room"></div>
+
+  <!-- 2. GHOST WORD FIT -->
+  <div class="ghost" id="ghost">
+    <span>F</span><span>I</span><span>T</span>
+  </div>
+
+  <!-- 3. TABS -->
+  <div class="tabs glass">
+    <div class="pill" id="pill"></div>
+    <button class="active" data-idx="0">Tops</button>
+    <button data-idx="1">Bottoms</button>
+    <button data-idx="2">Outerwear</button>
+    <button data-idx="3">Shoes</button>
+    <button data-idx="4">Accessories</button>
+  </div>
+
+  <!-- 4. RAIL -->
+  <div class="rail glass">
+    <button class="active" title="Tee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 001 1h1.79l-.75 11.23A2 2 0 006.89 22h10.22a2 2 0 001.99-1.87L18.35 8.9h1.79a1 1 0 001-1l.58-3.47a2 2 0 00-1.34-2.23z"/></svg></button>
+    <button title="Cart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg></button>
+    <button title="Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+    <button title="Profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+  </div>
+
+  <!-- 5. ARROWS -->
+  <button class="arrow left glass" id="btnPrev" aria-label="Previous">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <button class="arrow right glass" id="btnNext" aria-label="Next">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+
+  <!-- 6. STAGE & ARC CARDS -->
+  <div class="stage" id="stage"></div>
+
+  <!-- 7. MODEL -->
+  <div class="model">
+    <div id="mCur"></div>
+    <div id="mNext"></div>
+    <div class="grid" id="grid"></div>
+    <div class="scan" id="scan"></div>
+  </div>
+
+  <!-- 8. BUY CARD -->
+  <div class="buy glass">
+    <div class="thumb" id="thumb"></div>
+    <div class="info">
+      <div class="ln name" id="bName"><span>Basic T-shirt</span></div>
+      <div class="ln price" id="bPrice"><span>$45</span></div>
+    </div>
+    <div class="size-box">
+      <div class="lbl">Size</div>
+      <div class="chips" id="chips">
+        <button class="chip" data-size="S">S</button>
+        <button class="chip active" data-size="M">M</button>
+        <button class="chip" data-size="L">L</button>
+        <button class="chip" data-size="XL">XL</button>
+      </div>
+    </div>
+    <div class="color-box">
+      <div class="ln lbl" id="bColor"><span>Color · White</span></div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <!-- 9. CURSOR -->
+  <div class="cur" id="cursor">
+    <div class="cur-ring" id="curRing">
+      <div class="cur-dot" id="curDot"></div>
+      <span class="cur-lbl try" id="curTry">TRY ON</span>
+      <span class="cur-lbl drag" id="curDrag">DRAG</span>
+    </div>
+  </div>
+
+  <script>
+    const ITEMS = [
+      { n: "Basic T-shirt", p: 45,  g: [1.14, 3.06],  m: 0.37,  c: [["White","#f4f2ee"],["Ash","#c9c7c2"],["Charcoal","#3b3c3f"],["Navy","#27324d"]] },
+      { n: "Basic Sweater", p: 105, g: [49.7, 1.39],  m: 25.0,  c: [["White","#f6f4ef"],["Oat","#ddd3c2"],["Sage","#b9c2ae"],["Black","#1f1f21"]] },
+      { n: "Linen Shirt",   p: 95,  g: [98.2, 3.33],  m: 49.86, c: [["White","#f7f6f1"],["Sand","#d9ccb4"],["Sky","#bcd0e2"],["Olive","#717556"]] },
+      { n: "Grey Hoodie",   p: 110, g: [1.14, 93.3],  m: 74.77, c: [["Heather","#a9a9a8"],["Bone","#e6e1d6"],["Forest","#33463a"],["Black","#1f1f21"]] },
+      { n: "Ringer Tee",    p: 55,  g: [49.7, 95.3],  m: 99.35, c: [["White / Black","#f4f2ee"],["Cream / Navy","#efe6d3"],["Grey / Red","#c9c7c2"],["White / Green","#e9efe8"]] },
+    ];
+
+    // Build 10 cards
+    const stage = document.getElementById("stage");
+    const cards = [];
+    for (let i = 0; i < 10; i++) {
+      const item = ITEMS[i % 5];
+      const card = document.createElement("div");
+      card.className = "card glass";
+      card.innerHTML = `
+        <div class="g" style="background-position:${item.g[0]}% ${item.g[1]}%"></div>
+        <div class="name">${item.n}</div>
+        <div class="price">$${item.p}</div>
+        <div class="sheen"></div>
+      `;
+      card.addEventListener("click", () => handleCardClick(i));
+      stage.appendChild(card);
+      cards.push(card);
+    }
+
+    // State
+    let pos = 0, target = 0;
+    let isDragging = false, dragStartX = 0, dragStartPos = 0, lastX = 0, lastTime = 0, velocity = 0, movedDist = 0;
+    let pointerX = 0, pointerY = 0, smoothedX = 0, smoothedY = 0;
+    let cursorX = -100, cursorY = -100, targetCursorX = -100, targetCursorY = -100;
+    let intro = 0, introEase = 0;
+    let shownOutfit = -1;
+    let lastWheelTime = 0, wheelDelta = 0;
+    let activeColorIdx = 0;
+    const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Elements
+    const room = document.getElementById("room");
+    const ghost = document.getElementById("ghost");
+    const ghostSpans = ghost.querySelectorAll("span");
+    const mCur = document.getElementById("mCur");
+    const mNext = document.getElementById("mNext");
+    const grid = document.getElementById("grid");
+    const scan = document.getElementById("scan");
+    const thumb = document.getElementById("thumb");
+    const bName = document.getElementById("bName");
+    const bPrice = document.getElementById("bPrice");
+    const bColor = document.getElementById("bColor");
+    const dotsBox = document.getElementById("dots");
+    const pill = document.getElementById("pill");
+    const cursor = document.getElementById("cursor");
+    const curRing = document.getElementById("curRing");
+    const curDot = document.getElementById("curDot");
+    const curTry = document.getElementById("curTry");
+    const curDrag = document.getElementById("curDrag");
+
+    function updatePill(btn) {
+      if (!btn) return;
+      pill.style.transform = `translateX(${btn.offsetLeft}px)`;
+      pill.style.width = `${btn.offsetWidth}px`;
+    }
+
+    document.querySelectorAll(".tabs button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        updatePill(btn);
+        target += 5;
+      });
+    });
+    updatePill(document.querySelector(".tabs button.active"));
+
+    // Size chips
+    document.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+      });
+    });
+
+    // Color dots builder
+    function buildDots(item) {
+      dotsBox.innerHTML = "";
+      item.c.forEach(([cName, cHex], idx) => {
+        const dot = document.createElement("button");
+        dot.className = "dot" + (idx === 0 ? " active" : "");
+        dot.style.background = cHex;
+        dot.addEventListener("click", () => {
+          dotsBox.querySelectorAll(".dot").forEach(d => d.classList.remove("active"));
+          dot.classList.add("active");
+          activeColorIdx = idx;
+          rollText(bColor, `Color · ${cName}`);
+        });
+        dotsBox.appendChild(dot);
+      });
+    }
+
+    function rollText(container, newText) {
+      const oldSpan = container.firstElementChild;
+      const newSpan = document.createElement("span");
+      newSpan.textContent = newText;
+      newSpan.style.position = "absolute";
+      newSpan.style.left = "0";
+      newSpan.style.top = "0";
+      newSpan.style.transform = "translateY(110%)";
+      container.appendChild(newSpan);
+
+      if (isReduced) {
+        if (oldSpan) container.removeChild(oldSpan);
+        newSpan.style.position = "static";
+        newSpan.style.transform = "none";
+        return;
+      }
+
+      const opts = { duration: 620, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" };
+      if (oldSpan) {
+        oldSpan.animate([{ transform: "translateY(0%)" }, { transform: "translateY(-110%)" }], opts).onfinish = () => {
+          if (oldSpan.parentElement === container) container.removeChild(oldSpan);
+        };
+      }
+      newSpan.animate([{ transform: "translateY(110%)" }, { transform: "translateY(0%)" }], opts).onfinish = () => {
+        newSpan.style.position = "static";
+        newSpan.style.transform = "none";
+      };
+    }
+
+    let activeAnims = [];
+
+    function triggerTryOn(itemIdx) {
+      shownOutfit = itemIdx;
+      const item = ITEMS[itemIdx];
+
+      rollText(bName, item.n);
+      rollText(bPrice, `$${item.p}`);
+      rollText(bColor, `Color · ${item.c[0][0]}`);
+      buildDots(item);
+
+      thumb.style.backgroundPosition = `${item.g[0]}% ${item.g[1]}%`;
+      if (!isReduced) {
+        thumb.animate([
+          { transform: "translateY(70%) scale(.8)", opacity: 0.4 },
+          { transform: "translateY(0%) scale(1)", opacity: 1 }
+        ], { duration: 650, easing: "cubic-bezier(.2,.8,.2,1)" });
+      }
+
+      activeAnims.forEach(a => { try { a.cancel(); } catch(e){} });
+      activeAnims = [];
+
+      mNext.style.backgroundPosition = `${item.m}% 100%`;
+
+      if (isReduced) {
+        mCur.style.backgroundPosition = `${item.m}% 100%`;
+        mCur.style.opacity = "1";
+        mNext.style.opacity = "0";
+        return;
+      }
+
+      mNext.style.opacity = "1";
+
+      const a1 = mNext.animate([
+        { clipPath: "inset(0 0 100% 0)" },
+        { clipPath: "inset(0 0 0% 0)" }
+      ], { duration: 950, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" });
+
+      const a2 = grid.animate([
+        { clipPath: "inset(0 0 100% 0)" },
+        { clipPath: "inset(0 0 0 0)", offset: 0.5 },
+        { clipPath: "inset(100% 0 0 0)" }
+      ], { duration: 1092, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" });
+
+      const a3 = scan.animate([
+        { top: "0%", transform: "scaleX(.2)", opacity: 0 },
+        { top: "6%", transform: "scaleX(1)", opacity: 1, offset: 0.08 },
+        { top: "94%", transform: "scaleX(1)", opacity: 1, offset: 0.92 },
+        { top: "100%", transform: "scaleX(.2)", opacity: 0 }
+      ], { duration: 950, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" });
+
+      const a4 = mNext.animate([
+        { transform: "scale(1.012)" },
+        { transform: "scale(1)" }
+      ], { duration: 1250, easing: "ease-out", fill: "forwards" });
+
+      activeAnims = [a1, a2, a3, a4];
+
+      a1.onfinish = () => {
+        mCur.style.backgroundPosition = `${item.m}% 100%`;
+        mCur.style.opacity = "1";
+        mNext.style.opacity = "0";
+        mNext.style.clipPath = "inset(0 0 100% 0)";
+        activeAnims = [];
+      };
+    }
+
+    // Input Events
+    function setCursor(mode) {
+      if (mode === "try") {
+        curRing.style.transform = "scale(1.5)";
+        curRing.style.background = "rgba(226, 249, 82, 0.95)";
+        curRing.style.borderColor = "#E2F952";
+        curTry.style.opacity = "1";
+        curTry.style.transform = "scale(1)";
+        curDrag.style.opacity = "0";
+        curDot.style.opacity = "0";
+      } else if (mode === "drag") {
+        curRing.style.transform = "scale(1.2)";
+        curRing.style.background = "rgba(18, 20, 26, 0.85)";
+        curRing.style.borderColor = "rgba(226, 249, 82, 0.7)";
+        curDrag.style.opacity = "1";
+        curDrag.style.transform = "scale(1)";
+        curTry.style.opacity = "0";
+        curDot.style.opacity = "0";
+      } else if (mode === "btn") {
+        curRing.style.transform = "scale(0.6)";
+        curRing.style.background = "rgba(226, 249, 82, 0.3)";
+        curRing.style.borderColor = "#E2F952";
+        curTry.style.opacity = "0";
+        curDrag.style.opacity = "0";
+        curDot.style.opacity = "1";
+      } else {
+        curRing.style.transform = "scale(1)";
+        curRing.style.background = "rgba(18, 20, 26, 0.65)";
+        curRing.style.borderColor = "rgba(226, 249, 82, 0.95)";
+        curTry.style.opacity = "0";
+        curDrag.style.opacity = "0";
+        curDot.style.opacity = "1";
+      }
+    }
+
+    window.addEventListener("pointerdown", e => {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartPos = pos;
+      lastX = e.clientX;
+      lastTime = performance.now();
+      velocity = 0;
+      movedDist = 0;
+      curRing.style.transform = "scale(1.05)";
+    });
+
+    window.addEventListener("pointermove", e => {
+      pointerX = e.clientX / window.innerWidth - 0.5;
+      pointerY = e.clientY / window.innerHeight - 0.5;
+      targetCursorX = e.clientX;
+      targetCursorY = e.clientY;
+
+      if (!isDragging) {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        if (el?.closest(".card")) setCursor("try");
+        else if (el?.closest("button")) setCursor("btn");
+        else setCursor("drag");
+        return;
+      }
+
+      const dx = e.clientX - dragStartX;
+      movedDist += Math.abs(e.clientX - lastX);
+      const now = performance.now();
+      const dt = now - lastTime || 1;
+      velocity = (e.clientX - lastX) / dt;
+      lastX = e.clientX;
+      lastTime = now;
+
+      const W = window.innerWidth;
+      const stepX = (W <= 767 ? 0.36 : 0.215) * W;
+      pos = dragStartPos - dx / stepX;
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!isDragging) return;
+      isDragging = false;
+      const flick = Math.max(-2.5, Math.min(2.5, velocity));
+      target = Math.round(pos - flick * 3.2);
+      setCursor("default");
+    });
+
+    window.addEventListener("wheel", e => {
+      const now = performance.now();
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      wheelDelta += d;
+      if (Math.abs(wheelDelta) > 60 && now - lastWheelTime >= 260) {
+        target += wheelDelta > 0 ? 1 : -1;
+        wheelDelta = 0;
+        lastWheelTime = now;
+      }
+    }, { passive: true });
+
+    window.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") target -= 1;
+      if (e.key === "ArrowRight") target += 1;
+    });
+
+    document.getElementById("btnPrev").addEventListener("click", () => target -= 1);
+    document.getElementById("btnNext").addEventListener("click", () => target += 1);
+
+    function handleCardClick(idx) {
+      if (movedDist > 6) return;
+      const u = (((idx - pos + 5) % 10) + 10) % 10 - 5;
+      target = Math.round(pos + u);
+    }
+
+    // Animation Loop
+    const startTime = performance.now();
+
+    function loop(now) {
+      const t = (now - startTime) * 0.001;
+
+      if (intro < 1) {
+        intro = Math.min(intro + 0.012, 1);
+        introEase = 1 - Math.pow(1 - intro, 3);
+      }
+      const ie = isReduced ? 1 : introEase;
+
+      if (!isDragging) {
+        pos += (target - pos) * 0.11;
+      }
+
+      if (!isDragging && Math.abs(target - pos) < 0.02) {
+        const itemIdx = ((Math.round(target) % 5) + 5) % 5;
+        if (itemIdx !== shownOutfit) triggerTryOn(itemIdx);
+      }
+
+      smoothedX += (pointerX - smoothedX) * 0.06;
+      smoothedY += (pointerY - smoothedY) * 0.06;
+      const sx = smoothedX, sy = smoothedY;
+
+      room.style.transform = `translate3d(${-sx * 22}px, ${-sy * 14}px, 0) scale(${1.08 - 0.03 * ie})`;
+      ghost.style.transform = `translate(calc(-50% - ${sx * 40}px), ${-sy * 16}px)`;
+      ghostSpans.forEach((sp, i) => {
+        sp.style.transform = `translateY(${(1 - ie) * (60 + 30 * i)}px)`;
+      });
+
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const XS = (W <= 767 ? [0, .36, .5, .56, .6, .62] : [0, .215, .345, .432, .49, .52]).map(v => v * W);
+
+      const xAt = a => {
+        if (a <= 0) return XS[0];
+        if (a >= 5) return XS[5];
+        const idx = Math.floor(a);
+        return XS[idx] + (XS[Math.min(idx + 1, 5)] - XS[idx]) * (a - idx);
+      };
+
+      for (let i = 0; i < 10; i++) {
+        const card = cards[i];
+        const u = (((i - pos + 5) % 10) + 10) % 10 - 5;
+        const a = Math.abs(u);
+        const sg = Math.sign(u) || 1;
+
+        const x = sg * xAt(a) * ie;
+        let s, z, ry, op, blurPx = 0;
+
+        if (a < 1) {
+          s = 0.55 + 0.45 * a;
+          z = -260 * (1 - a);
+          op = a;
+          ry = -sg * 16 * a;
+        } else {
+          s = 1 / (1 + 0.3 * Math.pow(a - 1, 1.15));
+          z = -110 * (a - 1);
+          ry = -sg * (16 + 9 * Math.min(2, a - 1));
+          blurPx = Math.max(0, a - 1.6) * 2.4;
+          op = a > 3.4 ? Math.max(0, 1 - (a - 3.4) / 0.8) : 1;
+        }
+
+        const seed = i * 1.618;
+        const bob = Math.sin(t * 1.1 + seed) * H * 0.006 * Math.min(1, a);
+        const y = bob - (1 - s) * H * 0.04;
+        ry += sx * 10;
+
+        card.style.transform = `translate(${x}px, ${y}px) perspective(1300px) translateZ(${z}px) rotateY(${ry}deg) rotateX(${-sy * 6}deg) scale(${s * (0.6 + 0.4 * ie)})`;
+        card.style.filter = blurPx > 0.1 ? `blur(${blurPx}px)` : "none";
+        card.style.opacity = Math.max(0, op * ie);
+        card.style.zIndex = a < 1 ? 1 : Math.round(100 - 10 * a);
+        card.style.pointerEvents = op < 0.1 ? "none" : "auto";
+      }
+
+      cursorX += (targetCursorX - cursorX) * 0.22;
+      cursorY += (targetCursorY - cursorY) * 0.22;
+      cursor.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0)`;
+
+      requestAnimationFrame(loop);
+    }
+
+    triggerTryOn(0);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
